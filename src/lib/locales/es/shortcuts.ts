@@ -1,0 +1,23 @@
+export default {
+  'shortcuts.groupApp': 'Aplicación',
+  'shortcuts.groupPanes': 'Terminales y paneles',
+  'shortcuts.groupText': 'Texto',
+  // Palabra dentro de una combinación de teclas (comboText en shortcuts.ts sustituye el marcador {arrows} por ella).
+  'shortcuts.keyArrows': 'flechas',
+  'shortcuts.openSettings': 'Abrir los ajustes',
+  'shortcuts.palette': 'Paleta de comandos',
+  'shortcuts.toggleSidebar': 'Mostrar / ocultar la barra lateral',
+  'shortcuts.closeDialog': 'Cerrar el diálogo abierto',
+  'shortcuts.newTerminal': 'Nuevo terminal (primer shell)',
+  'shortcuts.closePane': 'Cerrar el panel con el foco',
+  'shortcuts.maximizePane': 'Maximizar / restaurar el panel con el foco',
+  'shortcuts.searchPane': 'Buscar en el panel con el foco',
+  'shortcuts.movePaneFocus': 'Mover el foco entre paneles',
+  'shortcuts.gotoPane': 'Ir al panel número N',
+  'shortcuts.switchWorkspace': 'Espacio de trabajo anterior / siguiente',
+  'shortcuts.fontSize': 'Fuente del terminal más grande / más pequeña',
+  'shortcuts.fontReset': 'Restablecer el tamaño de fuente del terminal',
+  'shortcuts.copySmart': 'Copiar si hay una selección (si no, se envía al programa)',
+  'shortcuts.copy': 'Copiar la selección',
+  'shortcuts.paste': 'Pegar',
+} as const;

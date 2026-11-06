@@ -1,0 +1,16 @@
+export default {
+  'settings.general.closeLabel': 'Al cerrar la ventana con terminales en marcha',
+  'settings.general.closeHint': 'Ocultar mantiene los terminales y agentes funcionando en la bandeja del sistema. Salir cierra todos los terminales.',
+  'settings.general.closeHide': 'Ocultar en la bandeja',
+  'settings.general.closeQuit': 'Salir',
+  'settings.general.confirmLabel': 'Preguntar antes de cerrar un panel en marcha',
+  'settings.general.confirmHint': 'Activado: el botón de cerrar necesita un segundo clic. Desactivado: el panel se cierra al instante y se mata su proceso.',
+  'settings.general.accentLabel': 'Color de acento',
+  'settings.general.accentHint': 'Resaltados, anillos de foco y el borde del panel activo.',
+  'settings.general.accentAria': 'Acento {color}',
+  'settings.general.languageLabel': 'Idioma',
+  'settings.general.languageHint': 'Idioma de la interfaz. Los terminales y la salida de los agentes no se traducen.',
+  'settings.general.languageEn': 'English',
+  'settings.general.languageEs': 'Español',
+  'settings.general.languageSystem': 'Predeterminado del sistema',
+} as const;

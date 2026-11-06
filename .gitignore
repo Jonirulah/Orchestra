@@ -1,0 +1,17 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+.cargo-home/
+*.log
+
+# Configuración local de cada máquina
+.npmrc
+dev.ps1
+.cache/
+*.local
+
+# Salidas de compilación y editor
+.vscode/
+.idea/
+Thumbs.db

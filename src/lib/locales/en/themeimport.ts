@@ -1,0 +1,25 @@
+export default {
+  'themeimport.invalidColor': '{name}: invalid color "{value}" for {label}; using the default',
+  'themeimport.noBackground': '{name}: no background color; using the default',
+  'themeimport.noForeground': '{name}: no foreground color; using the default',
+  'themeimport.ansiPartial': '{name}: only {n} of 16 ANSI colors defined; the rest come from Orchestra Dark',
+  'themeimport.lowContrast': '{name}: low contrast between text and background',
+  'themeimport.noSchemes': 'No color schemes found in this file.',
+  'themeimport.noSchemesJson': 'No color schemes found in this JSON.',
+  'themeimport.onlyFirst': 'Only the first {max} of {total} themes were imported',
+  'themeimport.skippedEntry': 'Skipped entry {n}: it has no colors',
+  'themeimport.jsonUnreadable': 'This looks like JSON but it could not be read. Check for a missing quote or bracket.',
+  'themeimport.jsonNoTheme': 'This JSON does not contain a color theme.',
+  'themeimport.noIterm': 'No iTerm2 colors found in this file.',
+  'themeimport.noAlacritty': 'No Alacritty [colors] tables found in this file.',
+  'themeimport.nothing': 'Nothing to import.',
+  'themeimport.tooLarge': 'This file is too large for a theme (limit 256 KB).',
+  'themeimport.empty': 'Nothing to import: the text is empty.',
+  'themeimport.unrecognized': 'Unrecognized theme format. Supported: Windows Terminal color schemes (.json), iTerm2 (.itermcolors), Alacritty (.toml) and Orchestra JSON.',
+  'themeimport.unreadable': 'This text could not be read as a theme.',
+
+  // Default names for imported themes that bring no name of their own.
+  'themeimport.fallbackImported': 'Imported theme',
+  'themeimport.fallbackIterm': 'iTerm2 theme',
+  'themeimport.fallbackAlacritty': 'Alacritty theme',
+} as const;

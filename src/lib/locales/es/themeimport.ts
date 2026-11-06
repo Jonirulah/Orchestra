@@ -1,0 +1,25 @@
+export default {
+  'themeimport.invalidColor': '{name}: color no válido "{value}" para {label}; se usa el predeterminado',
+  'themeimport.noBackground': '{name}: falta el color de fondo; se usa el predeterminado',
+  'themeimport.noForeground': '{name}: falta el color del texto; se usa el predeterminado',
+  'themeimport.ansiPartial': '{name}: solo hay {n} de 16 colores ANSI definidos; el resto vienen de Orchestra Dark',
+  'themeimport.lowContrast': '{name}: poco contraste entre el texto y el fondo',
+  'themeimport.noSchemes': 'No se han encontrado esquemas de color en este archivo.',
+  'themeimport.noSchemesJson': 'No se han encontrado esquemas de color en este JSON.',
+  'themeimport.onlyFirst': 'Solo se han importado los primeros {max} de {total} temas',
+  'themeimport.skippedEntry': 'Entrada {n} omitida: no tiene colores',
+  'themeimport.jsonUnreadable': 'Parece JSON, pero no se ha podido leer. Revisa si falta una comilla o un corchete.',
+  'themeimport.jsonNoTheme': 'Este JSON no contiene ningún tema de color.',
+  'themeimport.noIterm': 'No se han encontrado colores de iTerm2 en este archivo.',
+  'themeimport.noAlacritty': 'No se han encontrado tablas [colors] de Alacritty en este archivo.',
+  'themeimport.nothing': 'No hay nada que importar.',
+  'themeimport.tooLarge': 'Este archivo es demasiado grande para un tema (límite 256 KB).',
+  'themeimport.empty': 'No hay nada que importar: el texto está vacío.',
+  'themeimport.unrecognized': 'Formato de tema no reconocido. Formatos admitidos: esquemas de color de Windows Terminal (.json), iTerm2 (.itermcolors), Alacritty (.toml) y JSON de Orchestra.',
+  'themeimport.unreadable': 'No se ha podido leer este texto como un tema.',
+
+  // Nombres predeterminados de los temas importados que no traen nombre propio.
+  'themeimport.fallbackImported': 'Tema importado',
+  'themeimport.fallbackIterm': 'Tema de iTerm2',
+  'themeimport.fallbackAlacritty': 'Tema de Alacritty',
+} as const;

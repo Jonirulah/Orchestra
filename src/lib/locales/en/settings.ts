@@ -1,0 +1,16 @@
+export default {
+  'settings.general.closeLabel': 'When closing the window with running terminals',
+  'settings.general.closeHint': 'Hiding keeps terminals and agents running in the tray. Quitting closes every terminal.',
+  'settings.general.closeHide': 'Hide to tray',
+  'settings.general.closeQuit': 'Quit',
+  'settings.general.confirmLabel': 'Ask before closing a running pane',
+  'settings.general.confirmHint': 'On: the close button needs a second click. Off: the pane closes immediately and its process is killed.',
+  'settings.general.accentLabel': 'Accent color',
+  'settings.general.accentHint': 'Highlights, focus rings and the active pane border.',
+  'settings.general.accentAria': 'Accent {color}',
+  'settings.general.languageLabel': 'Language',
+  'settings.general.languageHint': 'Language of the interface. Terminals and agent output are not translated.',
+  'settings.general.languageEn': 'English',
+  'settings.general.languageEs': 'Español',
+  'settings.general.languageSystem': 'System default',
+} as const;

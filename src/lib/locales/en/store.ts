@@ -1,0 +1,35 @@
+export default {
+  // Toasts and notifications (resolved at the moment they are shown)
+  'store.toast.quotaUsed': '«{name}» has used {pct} % of its 5 h limit (resets in {time})',
+  'store.toast.needsPermission': '«{name}» needs your permission',
+  'store.toast.finished': '«{name}» has finished',
+  'store.toast.compacted': 'Compacted «{title}» before its cache expired',
+  'store.toast.accountCreated': 'Account «{name}» created: sign in with /login in the terminal that opens',
+  'store.toast.noAccountLoggedIn': 'No account is logged in: add one or run /login',
+  'store.toast.accountPicked': 'Claude · {name} — {reason}',
+  'store.toast.accountRemoved': 'Account «{name}» removed from Orchestra (its folder was not touched)',
+  'store.toast.scanFailed': 'Scan failed: {error}',
+  'store.toast.foundAccountsOne': 'Found {n} new account',
+  'store.toast.foundAccountsMany': 'Found {n} new accounts',
+  'store.toast.nothingNew': 'Folders rescanned: nothing new',
+  'store.toast.paneSwitched': 'Pane switched to account «{name}» (conversation continued)',
+  'store.toast.reconnectGaveUp': 'Gave up reconnecting «{name}» after {n} attempts',
+  'store.toast.movedToBackground': '«{title}» moved to background (still running)',
+  'store.toast.openFailed': 'Could not open: invalid data',
+  'store.toast.hostsImportedOne': 'Imported {n} host from ~/.ssh/config',
+  'store.toast.hostsImportedMany': 'Imported {n} hosts from ~/.ssh/config',
+  'store.toast.nothingToImport': 'Nothing to import: every ~/.ssh/config alias is already a host',
+  'store.toast.hostsCopiedOne': '{n} host copied as JSON (no secrets)',
+  'store.toast.hostsCopiedMany': '{n} hosts copied as JSON (no secrets)',
+  'store.toast.copyFailed': 'Could not copy: {error}',
+  // Title of the terminal opened by "Install" in Settings -> SSH keys
+  'store.pane.installKey': 'Install key → {name}',
+  // Name shown for an agent whose pane has no title
+  'store.agentFallback': 'Agent',
+  // Errors of "import settings from JSON" (settings.ts parseImport)
+  'store.import.invalidJson': 'Invalid JSON: {message}',
+  'store.import.notAnObject': 'Expected a JSON object with settings, like {"fontSize": 14}',
+  'store.import.noKnownSettings': 'No known settings found in that JSON',
+  'store.toast.providerAccountCreated': 'Account «{name}» added',
+  'store.pane.signIn': 'Sign in · {name}',
+} as const;

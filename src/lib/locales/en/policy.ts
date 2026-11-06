@@ -1,0 +1,30 @@
+export default {
+  // Account selection policies (label = row title, hint = short explanation)
+  'policy.manualLabel': 'Manual',
+  'policy.manualHint': 'You pick the account in each terminal',
+  'policy.roundRobinLabel': 'Round-robin',
+  'policy.roundRobinHint': 'Rotates through the available accounts',
+  'policy.resetSoonestLabel': 'Soonest reset',
+  'policy.resetSoonestHint': 'Spends the quota that renews soonest first',
+  'policy.mostFreeLabel': 'Most free',
+  'policy.mostFreeHint': 'The one that has used the least quota',
+  // Why an account was picked automatically (shown in a toast)
+  'policy.reason.allExhausted': 'all exhausted; «{name}» frees up first',
+  'policy.reason.allExhaustedIn': 'all exhausted; «{name}» frees up first (in {time})',
+  'policy.reason.resetsSoonest': 'resets soonest (in {time})',
+  'policy.reason.mostFree': 'most free ({pct} % used)',
+  'policy.reason.roundRobin': 'round-robin',
+  'policy.reason.roundRobinNoData': 'round-robin (no quota data yet)',
+  // Usage windows
+  'policy.durationNow': 'now',
+  'policy.window.reset': 'reset',
+  'policy.window.tipExpired': '0 % used · window has reset',
+  'policy.window.tip': '{pct} % used · resets {when}',
+  'policy.day.sun': 'Sun',
+  'policy.day.mon': 'Mon',
+  'policy.day.tue': 'Tue',
+  'policy.day.wed': 'Wed',
+  'policy.day.thu': 'Thu',
+  'policy.day.fri': 'Fri',
+  'policy.day.sat': 'Sat',
+} as const;

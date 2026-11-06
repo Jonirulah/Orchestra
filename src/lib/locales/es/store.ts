@@ -1,0 +1,35 @@
+export default {
+  // Toasts and notifications (resolved at the moment they are shown)
+  'store.toast.quotaUsed': '«{name}» ha usado el {pct} % de su límite de 5 h (se reinicia en {time})',
+  'store.toast.needsPermission': '«{name}» necesita tu permiso',
+  'store.toast.finished': '«{name}» ha terminado',
+  'store.toast.compacted': 'Se ha compactado «{title}» antes de que caducara su caché',
+  'store.toast.accountCreated': 'Cuenta «{name}» creada: inicia sesión con /login en el terminal que se abre',
+  'store.toast.noAccountLoggedIn': 'Ninguna cuenta tiene la sesión iniciada: añade una o ejecuta /login',
+  'store.toast.accountPicked': 'Claude · {name} — {reason}',
+  'store.toast.accountRemoved': 'Cuenta «{name}» quitada de Orchestra (no se ha tocado su carpeta)',
+  'store.toast.scanFailed': 'Error al analizar: {error}',
+  'store.toast.foundAccountsOne': 'Se ha encontrado {n} cuenta nueva',
+  'store.toast.foundAccountsMany': 'Se han encontrado {n} cuentas nuevas',
+  'store.toast.nothingNew': 'Carpetas analizadas de nuevo: no hay novedades',
+  'store.toast.paneSwitched': 'Panel cambiado a la cuenta «{name}» (la conversación continúa)',
+  'store.toast.reconnectGaveUp': 'Se ha dejado de reconectar «{name}» tras {n} intentos',
+  'store.toast.movedToBackground': '«{title}» pasa a segundo plano (sigue en ejecución)',
+  'store.toast.openFailed': 'No se pudo abrir: datos no válidos',
+  'store.toast.hostsImportedOne': 'Se ha importado {n} host de ~/.ssh/config',
+  'store.toast.hostsImportedMany': 'Se han importado {n} hosts de ~/.ssh/config',
+  'store.toast.nothingToImport': 'Nada que importar: todos los alias de ~/.ssh/config ya son hosts',
+  'store.toast.hostsCopiedOne': '{n} host copiado como JSON (sin secretos)',
+  'store.toast.hostsCopiedMany': '{n} hosts copiados como JSON (sin secretos)',
+  'store.toast.copyFailed': 'No se pudo copiar: {error}',
+  // Título del terminal que abre «Instalar» en Ajustes -> Claves SSH
+  'store.pane.installKey': 'Instalar clave → {name}',
+  // Name shown for an agent whose pane has no title
+  'store.agentFallback': 'Agente',
+  // Errors of "import settings from JSON" (settings.ts parseImport)
+  'store.import.invalidJson': 'JSON no válido: {message}',
+  'store.import.notAnObject': 'Se esperaba un objeto JSON con ajustes, como {"fontSize": 14}',
+  'store.import.noKnownSettings': 'No se ha encontrado ningún ajuste conocido en ese JSON',
+  'store.toast.providerAccountCreated': 'Cuenta «{name}» añadida',
+  'store.pane.signIn': 'Iniciar sesión · {name}',
+} as const;

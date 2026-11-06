@@ -1,0 +1,23 @@
+export default {
+  'shortcuts.groupApp': 'App',
+  'shortcuts.groupPanes': 'Terminals and panes',
+  'shortcuts.groupText': 'Text',
+  // Word inside a key combination (comboText in shortcuts.ts replaces the {arrows} marker with it).
+  'shortcuts.keyArrows': 'Arrow keys',
+  'shortcuts.openSettings': 'Open settings',
+  'shortcuts.palette': 'Command palette',
+  'shortcuts.toggleSidebar': 'Show / hide the sidebar',
+  'shortcuts.closeDialog': 'Close the open dialog',
+  'shortcuts.newTerminal': 'New terminal (first shell)',
+  'shortcuts.closePane': 'Close the focused pane',
+  'shortcuts.maximizePane': 'Maximize / restore the focused pane',
+  'shortcuts.searchPane': 'Search in the focused pane',
+  'shortcuts.movePaneFocus': 'Move focus between panes',
+  'shortcuts.gotoPane': 'Go to pane number N',
+  'shortcuts.switchWorkspace': 'Previous / next workspace',
+  'shortcuts.fontSize': 'Bigger / smaller terminal font',
+  'shortcuts.fontReset': 'Reset the terminal font size',
+  'shortcuts.copySmart': 'Copy when there is a selection (otherwise sent to the program)',
+  'shortcuts.copy': 'Copy the selection',
+  'shortcuts.paste': 'Paste',
+} as const;

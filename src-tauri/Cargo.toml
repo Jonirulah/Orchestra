@@ -1,0 +1,32 @@
+[package]
+name = "orchestra"
+version = "0.1.0"
+description = "Terminal, SSH and AI-agent manager for Windows"
+edition = "2021"
+default-run = "orchestra"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+portable-pty = "0.9"
+parking_lot = "0.12"
+sysinfo = { version = "0.37", default-features = false, features = ["system", "disk", "network"] }
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+socket2 = "0.6"
+getrandom = "0.3"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+[profile.dev]
+debug = 0
+incremental = true
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+strip = true
+codegen-units = 4

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Type-check (svelte-check)
+        run: npm run check
+
+      - name: Unit tests (TypeScript modules)
+        run: npm test
+
+      - name: Build the web UI
+        run: npm run build
+
+      # Real ConPTY, loopback HTTP and Credential Manager tests: the runner is headless, so a
+      # failure here that does not reproduce locally is most likely an environment limit.
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test

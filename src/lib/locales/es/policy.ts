@@ -1,0 +1,30 @@
+export default {
+  // Account selection policies (label = row title, hint = short explanation)
+  'policy.manualLabel': 'Manual',
+  'policy.manualHint': 'Eliges la cuenta en cada terminal',
+  'policy.roundRobinLabel': 'Por turnos',
+  'policy.roundRobinHint': 'Va rotando entre las cuentas disponibles',
+  'policy.resetSoonestLabel': 'Reinicio más próximo',
+  'policy.resetSoonestHint': 'Gasta primero la cuota que se renueva antes',
+  'policy.mostFreeLabel': 'Más libre',
+  'policy.mostFreeHint': 'La que ha gastado menos cuota',
+  // Why an account was picked automatically (shown in a toast)
+  'policy.reason.allExhausted': 'todas agotadas; «{name}» es la primera en liberarse',
+  'policy.reason.allExhaustedIn': 'todas agotadas; «{name}» es la primera en liberarse (en {time})',
+  'policy.reason.resetsSoonest': 'se reinicia antes (en {time})',
+  'policy.reason.mostFree': 'la más libre ({pct} % usado)',
+  'policy.reason.roundRobin': 'por turnos',
+  'policy.reason.roundRobinNoData': 'por turnos (aún sin datos de cuota)',
+  // Usage windows
+  'policy.durationNow': 'ahora',
+  'policy.window.reset': 'reinicio',
+  'policy.window.tipExpired': '0 % usado · la ventana se ha reiniciado',
+  'policy.window.tip': '{pct} % usado · se reinicia {when}',
+  'policy.day.sun': 'dom',
+  'policy.day.mon': 'lun',
+  'policy.day.tue': 'mar',
+  'policy.day.wed': 'mié',
+  'policy.day.thu': 'jue',
+  'policy.day.fri': 'vie',
+  'policy.day.sat': 'sáb',
+} as const;
