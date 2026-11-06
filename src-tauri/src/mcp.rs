@@ -1396,21 +1396,33 @@ pub fn restrict_to_current_user(path: &Path, is_dir: bool) -> Result<(), String>
         .map(|r| PathBuf::from(r).join("System32").join("icacls.exe"))
         .unwrap_or_else(|_| PathBuf::from("icacls.exe"));
     let grant = if is_dir { format!("{who}:(OI)(CI)F") } else { format!("{who}:F") };
-    let out = std::process::Command::new(exe)
-        .arg(path)
-        .args(["/inheritance:r", "/grant:r"])
-        .arg(grant)
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-        .output()
-        .map_err(|e| format!("could not run icacls: {e}"))?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        let mut msg = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        msg.push_str(&String::from_utf8_lossy(&out.stderr));
-        Err(format!("icacls failed: {}", msg.trim()))
-    }
+    let run = |args: Vec<String>| -> Result<(), String> {
+        let out = std::process::Command::new(&exe)
+            .arg(path)
+            .args(args)
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .output()
+            .map_err(|e| format!("could not run icacls: {e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            let mut msg = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            msg.push_str(&String::from_utf8_lossy(&out.stderr));
+            Err(format!("icacls failed: {}", msg.trim()))
+        }
+    };
+    // 1) Sin herencia y sin las entradas amplias que Windows pone EXPLÍCITAS en los ficheros nuevos cuando el proceso va elevado
+    //    (permisos por defecto del token: SYSTEM y Administradores). Por SID, para que no dependa del idioma de Windows.
+    let mut strip: Vec<String> = vec!["/inheritance:r".into(), "/remove:g".into()];
+    strip.extend(BROAD_SIDS.iter().map(|s| format!("*{s}")));
+    run(strip)?;
+    // 2) Control total solo para el usuario actual (si el usuario fuese uno de los anteriores, esto lo devuelve).
+    run(vec!["/grant:r".into(), grant])
 }
+
+/// Quién NO debe poder leer los ficheros con secretos: Todos, SYSTEM, Administradores, Usuarios y Usuarios autenticados.
+#[cfg(windows)]
+const BROAD_SIDS: [&str; 5] = ["S-1-1-0", "S-1-5-18", "S-1-5-32-544", "S-1-5-32-545", "S-1-5-11"];
 
 #[cfg(not(windows))]
 pub fn restrict_to_current_user(_path: &Path, _is_dir: bool) -> Result<(), String> {
@@ -3316,6 +3328,25 @@ mod tests {
         let _ = load_or_create_token(&dir).unwrap();
         let out = std::process::Command::new("icacls").arg(&old).output().unwrap();
         assert!(!String::from_utf8_lossy(&out.stdout).to_lowercase().contains("(i)"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn restrict_removes_explicit_broad_entries_like_an_elevated_session_creates() {
+        let dir = temp_dir("acl-explicit");
+        let f = dir.join("secreto");
+        std::fs::write(&f, "x").unwrap();
+        // Lo que ve el runner de CI: entradas EXPLÍCITAS para SYSTEM y Administradores.
+        let g = std::process::Command::new("icacls").arg(&f).args(["/grant", "*S-1-5-18:F", "*S-1-5-32-544:F"]).output().unwrap();
+        assert!(g.status.success(), "no se pudo preparar el caso");
+        restrict_to_current_user(&f, false).unwrap();
+        let acl = String::from_utf8_lossy(&std::process::Command::new("icacls").arg(&f).output().unwrap().stdout).to_lowercase();
+        let user = std::env::var("USERNAME").unwrap().to_lowercase();
+        assert!(acl.contains(&user), "{acl}");
+        for broad in ["nt authority\\system", "builtin\\administrators", "everyone", "builtin\\users"] {
+            assert!(!acl.contains(broad), "sigue accesible para {broad}: {acl}");
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 
