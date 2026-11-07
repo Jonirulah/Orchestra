@@ -12,14 +12,17 @@
   import SettingsAccounts from './SettingsAccounts.svelte';
   import SettingsData from './SettingsData.svelte';
   import SettingsMcp from './SettingsMcp.svelte';
+  import SettingsMcpServers from './SettingsMcpServers.svelte';
   import SettingsKeys from './SettingsKeys.svelte';
 
-  type Tab = 'general' | 'terminal' | 'agents' | 'accounts' | 'sshkeys' | 'mcp' | 'shortcuts' | 'data';
+  type Tab = 'general' | 'terminal' | 'agents' | 'accounts' | 'mcpservers' | 'sshkeys' | 'mcp' | 'shortcuts' | 'data';
   const TABS: { id: Tab; label: string; icon: string; sub: string }[] = [
     { id: 'general', label: t('settings.dialog.tabGeneral'), icon: 'gear', sub: t('settings.dialog.subGeneral') },
     { id: 'terminal', label: t('settings.dialog.tabTerminal'), icon: 'terminal', sub: t('settings.dialog.subTerminal') },
     { id: 'agents', label: t('settings.dialog.tabAgents'), icon: 'bot', sub: t('settings.dialog.subAgents') },
     { id: 'accounts', label: t('settings.dialog.tabAccounts'), icon: 'user', sub: t('settings.dialog.subAccounts') },
+    // Junto a Cuentas: sus columnas son las cuentas. Pestaña propia porque la tabla necesita todo el ancho del panel.
+    { id: 'mcpservers', label: t('settings.dialog.tabMcpServers'), icon: 'layers', sub: t('settings.dialog.subMcpServers') },
     { id: 'sshkeys', label: t('settings.dialog.tabSshKeys'), icon: 'key', sub: t('settings.dialog.subSshKeys') },
     { id: 'mcp', label: t('settings.dialog.tabMcp'), icon: 'plug', sub: t('settings.dialog.subMcp') },
     { id: 'shortcuts', label: t('settings.dialog.tabShortcuts'), icon: 'keyboard', sub: t('settings.dialog.subShortcuts') },
@@ -65,7 +68,7 @@
         </div>
       </div>
       {#each TABS as tb (tb.id)}
-        <button type="button" class:on={tab === tb.id} onclick={() => (tab = tb.id)}><span class="s-ico"><Icon name={tb.icon} size={16} /></span> {tb.label}</button>
+        <button type="button" class:on={tab === tb.id} title={tb.sub} onclick={() => (tab = tb.id)}><span class="s-ico"><Icon name={tb.icon} size={16} /></span> {tb.label}</button>
       {/each}
       <span class="grow"></span>
       <span class="s-key">{t('settings.dialog.keyHint')}</span>
@@ -89,6 +92,7 @@
           {:else if tab === 'agents'}<SettingsAgents />
           {:else if tab === 'accounts'}<SettingsAccounts onclose={close} />
           {:else if tab === 'sshkeys'}<SettingsKeys onclose={close} />
+          {:else if tab === 'mcpservers'}<SettingsMcpServers />
           {:else if tab === 'mcp'}<SettingsMcp />
           {:else if tab === 'data'}<SettingsData />
           {:else}

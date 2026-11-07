@@ -6,7 +6,7 @@ Task-oriented recipes for Orchestra 0.1.0. Menu and button names are written as 
 [SECURITY.md](SECURITY.md).
 
 Contents: [Accounts](#accounts) · [SSH](#ssh) · [Status bar](#status-bar) · [Git chip](#git-branch-chip-and-folder-tracking) ·
-[Agents](#agents-subagents-and-usage) · [Themes](#themes) · [Backup and restore](#backup-and-restore) ·
+[Agents](#agents-subagents-and-usage) · [MCP view](#mcp-view) · [Consumption](#consumption) · [Themes](#themes) · [Backup and restore](#backup-and-restore) ·
 [Troubleshooting](#troubleshooting)
 
 ## Accounts
@@ -181,7 +181,41 @@ Claude accounts show **5 h** and **7 d** bars with time to reset in the sidebar.
    the answer. Details: [SECURITY.md](SECURITY.md#usage-query-opt-in).
 
 Related Agents settings: *Account selection policy* (also in the sidebar via **Claude · auto**), *Warn when an account nears its 5 h
-limit*, *Resume Claude conversations on restart* and *Auto-compact when away* (experimental).
+limit*, *Resume Claude conversations on restart* and *Auto-compact when away* (experimental). Auto-compact never types over a
+prompt with unsent text; *Why it is not compacting now* shows the last decision for each running Claude agent.
+
+![Settings → Agents, auto-compact](screenshots/settings-autocompact.png)
+
+## MCP view
+
+**MCP** in the top bar opens a table with every MCP server (rows) of every account (columns): Claude user and local scopes, Codex
+and opencode. Each cell says whether the server is there, on or off, and, once tested, how many tools it offers or why it failed.
+
+- **Test all** (or a single cell) starts each server the way the agent would and lists its tools. Results are kept while Orchestra
+  stays open. The bottom row is a rough estimate of the tokens the tool definitions add to every session of that account.
+- **Add MCP**: fill the form or paste the install command or JSON from a server's README (**Read it**), pick the target accounts and
+  press **Preview**. The preview shows the exact change per account (secret values masked); **Apply** writes it.
+- When the same server has **two versions** (A/B) in different accounts, open its row to see what differs and **Make all A**.
+- **Remove** takes a server out of the chosen accounts and scopes. Cells that need something from you show the action: approve a
+  project server, turn it on, or sign in.
+- **Undo last change** restores the files as they were before the last apply.
+
+![MCP view](screenshots/mcp-view.png)
+
+## Consumption
+
+**Consumption** in the top bar shows where the tokens of Claude Code go, computed from the transcripts on this PC (nothing is sent).
+
+- Pick **Today**, **7 days** or **30 days**, and the unit: *Input-token equiv.* (one plain input token of the model that used it) or
+  *USD (estimate)* at API prices. Breakdowns by origin (reads, Bash, fixed base, skills and memory, output, thinking), session,
+  project, model and subagent.
+- **Advice** cards are sorted by estimated saving. Each one says what to do, the saving as "before → after" and the assumption it
+  makes; **Hide** dismisses one, **see its row** jumps to the data behind it.
+- The chart button in a pane header opens the same analysis for that pane's session, next to the terminal.
+- **Copy report for your AI** copies a Markdown summary (short or full) to paste into a chat. Agents can get the same report from
+  Orchestra's MCP server with the `usage_report` tool.
+
+![Consumption view](screenshots/consumption-view.png)
 
 ## Themes
 

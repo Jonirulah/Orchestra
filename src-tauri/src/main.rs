@@ -3,12 +3,14 @@
 mod accounts;
 mod agents;
 mod commands;
+mod consumo;
 mod git;
 mod history;
 mod hostkey;
 mod idle;
 mod mcp;
 mod mcp_exec;
+mod mcp_manager;
 mod metrics;
 mod net;
 mod providers;
@@ -103,8 +105,16 @@ fn main() {
             hostkey::hostkey_trust,
             agents::agent_scan,
             agents::claude_session_exists,
+            consumo::consumo_session,
+            consumo::consumo_scan,
+            consumo::consumo_cancel,
+            consumo::consumo_pane,
+            consumo::consumo_report,
+            consumo::consumo_save_report,
             subtranscript::agent_transcript,
             idle::system_idle_seconds,
+            idle::dev_autocompact_override,
+            idle::dev_autocompact_log,
             accounts::claude_profiles,
             accounts::prepare_claude_dir,
             providers::provider_detect,
@@ -125,6 +135,14 @@ fn main() {
             mcp::mcp_sync,
             mcp::mcp_audit,
             mcp::mcp_approval_answer,
+            mcp_manager::mcpm_list,
+            mcp_manager::mcpm_probe,
+            mcp_manager::mcpm_stamp,
+            mcp_manager::write::mcpm_plan,
+            mcp_manager::write::mcpm_apply,
+            mcp_manager::write::mcpm_undo_info,
+            mcp_manager::write::mcpm_undo,
+            mcp_manager::write::mcpm_reveal,
             metrics::metrics_sample,
             metrics::metrics_reset,
             metrics::metrics_history,

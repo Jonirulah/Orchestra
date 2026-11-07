@@ -89,6 +89,14 @@
 
   <span class="grow"></span>
 
+  <button class="btn" class:on={app.mcpOpen} aria-pressed={app.mcpOpen} title={t('mcp.view.openTitle')} onclick={() => { app.mcpOpen = !app.mcpOpen; if (app.mcpOpen) app.consumoOpen = false; }}>
+    <Icon name="layers" /> {t('mcp.view.title')}
+  </button>
+
+  <button class="btn" class:on={app.consumoOpen} aria-pressed={app.consumoOpen} title={t('consumo.openTitle')} onclick={() => { app.consumoOpen = !app.consumoOpen; if (app.consumoOpen) app.mcpOpen = false; }}>
+    <Icon name="bars" /> {t('consumo.title')}
+  </button>
+
   <div class="picker-wrap">
     <button class="btn" onclick={() => (pickerOpen = !pickerOpen)} title={t('topbar.gridLayoutTitle')}>
       <Icon name="grid" /> {ws.cols.length} × {ws.rows.length}

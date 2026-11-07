@@ -74,6 +74,17 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
   estás ausente (escribe `/compact` en un Claude inactivo poco antes de que caduque su caché del prompt; experimental).
 - Un **servidor MCP** local permite que los agentes vean los hosts y terminales que permitas expresamente (permiso por host,
   registro de auditoría). El acceso por host es `read` (los agentes leen terminales), `ask` (también pueden ejecutar un comando con `run_command`, pero solo tras aprobar tú ese comando exacto en un diálogo) o `full` (ejecutan comandos sin preguntar). Cada intento queda auditado.
+- **Vista MCP** (barra superior → **MCP**): todos los servidores MCP de todas las cuentas en una tabla (ámbitos usuario y local de
+  Claude, Codex, opencode). Pruébalos (herramientas encontradas, o por qué no), instala uno en varias cuentas a la vez desde un
+  formulario o pegando el comando de un README, compara lado a lado cuando el mismo servidor tiene dos versiones e iguala las demás
+  a una, quítalo, y apruébalo, enciéndelo o inicia sesión donde la cuenta lo pida. Cada cambio enseña antes la edición exacta y se
+  puede deshacer. Cada servidor muestra cuántos tokens, aproximadamente, añaden sus herramientas a cada sesión.
+- **Vista Consumo** (barra superior → **Consumo**): adónde van los tokens de Claude Code, leído de las transcripciones locales (no
+  se envía nada). Por periodo (hoy, 7 o 30 días), sesión, proyecto, modelo y subagente, en equivalentes de token de entrada o en
+  USD estimados a precios de la API; un cajón por panel muestra la sesión actual. Las tarjetas de **consejos** señalan los mayores
+  derroches (ficheros leídos enteros una y otra vez, cachés que caducan en las pausas, una base fija pesada…) con el ahorro como
+  «antes → después» y la suposición que hay detrás. **Copiar informe para tu IA** da un resumen en Markdown para pegar en un chat, y
+  el servidor MCP ofrece el mismo informe como herramienta `usage_report`.
 
 **Barra de estado**
 - Una barra fina abajo: nombre del equipo, CPU, RAM, lectura/escritura de disco, red de bajada/subida, tiempo encendido, agentes
@@ -101,7 +112,9 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
 |---|---|
 | ![Barra lateral con las cuentas agrupadas por proveedor](docs/screenshots/sidebar-accounts.png)<br>Cuentas agrupadas por proveedor, con barras de uso | ![Cajón del visor de subagentes](docs/screenshots/subagent-drawer.png)<br>Visor de subagentes: transcripción en directo, solo lectura |
 | ![Barra de estado de una pestaña SSH](docs/screenshots/statusbar-ssh.png)<br>Barra de estado de una pestaña SSH con las métricas del servidor | ![Ajustes del terminal](docs/screenshots/settings-terminal.png)<br>Ajustes → Terminal |
-| ![Copia de seguridad en Ajustes → Datos](docs/screenshots/settings-data-backup.png)<br>Ajustes → Datos: copia de seguridad completa | |
+| ![Copia de seguridad en Ajustes → Datos](docs/screenshots/settings-data-backup.png)<br>Ajustes → Datos: copia de seguridad completa | ![Ajustes → Agentes, autocompactado](docs/screenshots/settings-autocompact.png)<br>Ajustes → Agentes: autocompactado en ausencia, y por qué no actúa ahora |
+| ![Vista MCP con los servidores probados](docs/screenshots/mcp-view.png)<br>Vista MCP: todos los servidores de todas las cuentas, probados, con dos versiones de uno | ![Instalar un servidor MCP en varias cuentas](docs/screenshots/mcp-install-preview.png)<br>Instalar un servidor en tres cuentas: el cambio exacto, antes de aplicarlo |
+| ![Vista Consumo, últimos 7 días](docs/screenshots/consumption-view.png)<br>Consumo de los últimos 7 días: adónde van los tokens y consejos con el ahorro | ![Cajón de consumo de la sesión junto al terminal](docs/screenshots/consumption-session.png)<br>Consumo de una sesión, junto a su terminal |
 
 Las capturas están en inglés (la interfaz base).
 

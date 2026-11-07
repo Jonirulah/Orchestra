@@ -74,6 +74,17 @@ xterm.js: an executable of about 10 MB, no Electron.
 - A local **MCP server** lets agents see the hosts and terminals you explicitly allow (per-host permission, audit log). Access per host is
   `read` (agents read terminals), `ask` (they can also run a command with `run_command`, but only after you approve that exact
   command in a dialog) or `full` (they run commands without asking). Every attempt is audited.
+- **MCP view** (top bar → **MCP**): every MCP server of every account in one table (Claude user and local scopes, Codex,
+  opencode). Test them (tools found, or why not), install one in several accounts at once from a form or a command pasted from a
+  README, see side by side when the same server has two versions and make the others equal to one, remove it, and approve, turn on
+  or sign in where the account needs it. Every change shows the exact edit first and can be undone. Each server shows roughly how
+  many tokens its tool definitions add to every session.
+- **Consumption view** (top bar → **Consumption**): where your Claude Code tokens go, read from the local transcripts (nothing is
+  sent anywhere). By period (today, 7 or 30 days), session, project, model and subagent, in input-token equivalents or estimated
+  USD at API prices; a drawer per pane shows the current session. **Advice** cards point at the biggest wastes (files read whole
+  again and again, caches that expire during pauses, a heavy fixed base…) with the saving as "before → after" and the assumption
+  behind it. **Copy report for your AI** gives a Markdown summary to paste into a chat, and the MCP server exposes the same report
+  as the `usage_report` tool.
 
 **Status bar**
 - A thin bar at the bottom: hostname, CPU, RAM, disk read/write, network down/up, uptime, working / waiting agents and the highest
@@ -98,7 +109,9 @@ xterm.js: an executable of about 10 MB, no Electron.
 |---|---|
 | ![Sidebar with accounts grouped by provider](docs/screenshots/sidebar-accounts.png)<br>Accounts grouped by provider, with usage bars | ![Subagent viewer drawer](docs/screenshots/subagent-drawer.png)<br>Subagent viewer: a live, read-only transcript |
 | ![Status bar of an SSH tab](docs/screenshots/statusbar-ssh.png)<br>Status bar of an SSH tab showing the server's metrics | ![Terminal settings](docs/screenshots/settings-terminal.png)<br>Settings → Terminal |
-| ![Backup in Settings → Data](docs/screenshots/settings-data-backup.png)<br>Settings → Data: full backup | |
+| ![Backup in Settings → Data](docs/screenshots/settings-data-backup.png)<br>Settings → Data: full backup | ![Settings → Agents, auto-compact](docs/screenshots/settings-autocompact.png)<br>Settings → Agents: auto-compact when away, and why it is not acting now |
+| ![MCP view with tested servers](docs/screenshots/mcp-view.png)<br>MCP view: every server of every account, tested, with two versions of one | ![Installing an MCP server in several accounts](docs/screenshots/mcp-install-preview.png)<br>Installing a server in three accounts: the exact change, before applying |
+| ![Consumption view, last 7 days](docs/screenshots/consumption-view.png)<br>Consumption, last 7 days: where the tokens go and advice with the saving | ![Session consumption drawer next to the terminal](docs/screenshots/consumption-session.png)<br>Consumption of one session, next to its terminal |
 
 ## Install
 

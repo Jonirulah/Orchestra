@@ -52,6 +52,8 @@
   const counts = $derived(providerCounts(app.accounts));
   const provList = $derived(PROVIDERS.filter((p) => counts[p] > 0));
   const filterEff = $derived(effectiveFilter(app.settings.accountsFilter, app.accounts));
+  /** Con la vista MCP abierta, la cuenta bajo el ratón / el foco resalta su columna. */
+  const mcpHover = (id: string | null) => { if (app.mcpOpen || id === null) app.mcpHover = id; };
   const sections = $derived(buildAccountView(
     app.accounts,
     { filter: app.settings.accountsFilter, sort: app.settings.accountsSort, group: app.settings.accountsGroup },
@@ -316,6 +318,7 @@
         {:else}
         <button class="item" draggable="true" ondragstart={(e) => dragStart(e, reqOf(a))} in:fly={{ x: -10, duration: dur(150) }}
           oncontextmenu={(e) => accountCtx(e, a)} onkeydown={(e) => accountKey(e, a)}
+          onmouseenter={() => mcpHover(a.id)} onmouseleave={() => mcpHover(null)} onfocus={() => mcpHover(a.id)} onblur={() => mcpHover(null)}
           onclick={() => app.open(reqOf(a))} title={t('sidebar.accounts.openTitle')}>
           <span class="dot" style:background={a.color}></span>
           <span class="txt wide">
@@ -337,7 +340,8 @@
             <span class="txt"><span class="name">{t('sidebar.accounts.auto')}</span><span class="sub">{POLICIES.find((p) => p.id === app.settings.accountPolicy)?.label}</span></span>
           </button>
           {:else}<!-- el lanzador suelto de siempre; con una cuenta «Default Codex» sobra (buildAccountView ya lo omite) -->
-          <button class="item" draggable="true" ondragstart={(e) => dragStart(e, { kind: 'codex' })} onclick={() => app.open({ kind: 'codex' })}>
+          <button class="item" draggable="true" ondragstart={(e) => dragStart(e, { kind: 'codex' })} onclick={() => app.open({ kind: 'codex' })}
+            onmouseenter={() => mcpHover('codex-launcher')} onmouseleave={() => mcpHover(null)} onfocus={() => mcpHover('codex-launcher')} onblur={() => mcpHover(null)}>
             <span class="dot" style:background="#10a37f"></span>
             <span class="txt"><span class="name">Codex (ChatGPT)</span><!-- i18n-ignore: product name --><span class="sub">{t('sidebar.accounts.codexSub')}</span></span>
           </button>

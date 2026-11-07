@@ -3,6 +3,24 @@
 All notable changes to Orchestra are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project follows [Semantic Versioning](https://semver.org/) (0.x: anything may change between minor versions).
 
+## [Unreleased]
+
+### Added
+- **MCP view** (top bar → MCP): one table with every MCP server of every account (Claude user and local scopes, Codex, opencode).
+  Test servers and see their tools or why they fail; install one in several accounts at once from a form or a command pasted from a
+  README; compare two versions of the same server and make the others equal to one; remove it; approve, turn on or sign in where an
+  account needs it. Every change shows the exact edit first and the last one can be undone. Each server shows roughly how many
+  tokens its tool definitions add to every session.
+- **Consumption view** (top bar → Consumption): where Claude Code tokens go, computed locally from the transcripts, by period
+  (today, 7 or 30 days), session, project, model and subagent, in input-token equivalents or estimated USD. A drawer per pane shows
+  the current session. Advice cards rank the biggest wastes with the saving as "before → after" and the assumption behind it.
+- **Copy report for your AI**: a Markdown summary of the consumption analysis to paste into a chat, also available to agents as the
+  read-only MCP tool **`usage_report`**.
+
+### Fixed
+- Auto-compact no longer types `/compact` over a prompt that has unsent text, and Settings → Agents now explains why it is not
+  acting on each running agent.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

@@ -33,4 +33,5 @@ export default {
   'store.toast.providerAccountCreated': 'Account «{name}» added',
   'store.pane.signIn': 'Sign in · {name}',
   'store.toast.hostsSortManual': 'Switched to manual order: the A–Z order you saw is kept, now rearrange freely',
+  'store.pane.mcpLogin': 'MCP sign-in · {name}',
 } as const;

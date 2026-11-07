@@ -41,6 +41,11 @@ export function t(key: Key, vars?: Record<string, string | number>): string {
   return tk(key, vars);
 }
 
+/** Plural sencillo (EN y ES): `<base>.one` si n = 1, `<base>.other` si no; `{n}` va con el formato del idioma. */
+export function tn(base: string, n: number, vars?: Record<string, string | number>): string {
+  return tk(`${base}.${n === 1 ? 'one' : 'other'}`, { n: n.toLocaleString(current === 'es' ? 'es-ES' : 'en-US', { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions), ...vars });
+}
+
 /** Igual que `t` pero para claves construidas en tiempo de ejecución, p. ej. tk(`agent.status.${s}`). */
 export function tk(key: string, vars?: Record<string, string | number>): string {
   return fill(lookup(current, key) || lookup('en', key) || key, vars);

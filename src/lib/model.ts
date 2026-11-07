@@ -121,6 +121,12 @@ export function displayName(name: string): string {
   return m ? t('model.defaultName.workspace', { n: m[1] }) : name;
 }
 
+/** Nombre con que se crea la cuenta de una carpeta ~/.claude* detectada («Main» la de siempre; ~/.claude-b → «b»). */
+export function claudeAccountName(dir: string, isDefault: boolean): string {
+  const base = dir.replace(/\\/g, '/').split('/').pop() ?? 'claude';
+  return isDefault ? DEFAULT_MAIN_NAME : base.replace(/^\.claude-?/, '') || base;
+}
+
 export function equalTracks(n: number): number[] {
   const k = Math.max(1, Math.floor(n));
   return Array.from({ length: k }, () => 1 / k);
@@ -644,4 +650,18 @@ export function restorableSpec(spec: PaneSpec): PaneSpec {
     return { ...spec, args: ['-NoLogo'] };
   }
   return spec;
+}
+
+/**
+ * Inicio de sesión de UN servidor MCP (OAuth) con el entorno de la cuenta: `codex mcp login <x>`, `opencode mcp auth <x>`;
+ * Claude Code no tiene comando: se abre `claude` con la indicación de usar `/mcp` (`hint`, ya traducida).
+ * Sin cuenta (`acc` null: el lanzador «Codex» de siempre) usa la configuración de siempre.
+ */
+export function mcpLoginSpec(provider: Provider, acc: Pick<Account, 'id' | 'dir' | 'isDefault' | 'provider'> | null, name: string, opts: { cwd?: string; hint?: string } = {}): PaneSpec {
+  const n = psq(name);
+  const standalone = provider === 'opencode' && acc && !acc.isDefault ? ' --standalone' : '';
+  const cmd = provider === 'codex' ? `& codex mcp login ${n}`
+    : provider === 'opencode' ? `& opencode mcp auth ${n}${standalone}`
+    : `Write-Host ${psq(opts.hint ?? `/mcp → ${name} → Authenticate`)} -ForegroundColor Yellow; & claude`;
+  return { program: 'powershell.exe', args: ['-NoLogo', '-NoExit', '-Command', cmd], cwd: opts.cwd, env: acc ? providerEnv(acc) : undefined };
 }
