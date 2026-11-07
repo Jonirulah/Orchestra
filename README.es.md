@@ -12,12 +12,12 @@
 <p align="center">
   <a href="LICENSE"><img alt="Licencia: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Plataforma: Windows" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4.svg">
-  <img alt="Versión 0.3.0" src="https://img.shields.io/badge/version-0.3.0-orange.svg">
+  <img alt="Versión 0.4.0" src="https://img.shields.io/badge/version-0.4.0-orange.svg">
 </p>
 
 Orchestra coloca tus terminales en una cuadrícula ajustable a la derecha y, a la izquierda, una barra lateral con tus cuentas de
 Claude / Codex / opencode, tus hosts SSH, tus shells locales y, en directo, lo que está haciendo cada agente de IA. Está hecho con
-Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
+Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 15 MB, sin Electron.
 
 ![Ventana principal de Orchestra (datos de demostración)](docs/screenshots/overview.png)
 
@@ -135,8 +135,8 @@ Descarga los archivos desde la página de [Releases](../../releases). Hay dos op
 
 | Archivo | Qué es |
 |---|---|
-| `Orchestra_0.3.0_x64-setup.exe` | Instalador NSIS, **por usuario** (sin permisos de administrador), en inglés / español. |
-| `Orchestra_0.3.0_x64-portable.exe` | Ejecutable portátil (unos 10 MB). Ponlo donde quieras y ejecútalo. |
+| `Orchestra_0.4.0_x64-setup.exe` | Instalador NSIS, **por usuario** (sin permisos de administrador), en inglés / español. |
+| `Orchestra_0.4.0_x64-portable.exe` | Ejecutable portátil (unos 15 MB). Ponlo donde quieras y ejecútalo. |
 
 Notas:
 
@@ -266,7 +266,7 @@ docs/                 Arquitectura, seguridad, i18n, guía de usuario, contribuc
 
 ## Estado y limitaciones conocidas
 
-Orchestra 0.3.0 (la 0.1.0 fue la primera versión pública) es un proyecto de una sola persona. Novedades de la 0.3.0: gráfica de uso, carpetas de hosts SSH, espacios guardados, ficha de agente y sonidos de aviso, probadas con tests y en la demo del navegador, pero aún no con agentes vivos ni un servidor SSH real en la app de escritorio. Novedad de la 0.2.0: la herramienta MCP `run_command`, cubierta por pruebas automáticas con un ejecutor falso y procesos locales reales, pero que el autor **no** ha probado aún contra un servidor SSH real. Qué está verificado y qué no:
+Orchestra 0.4.0 (la 0.1.0 fue la primera versión pública) es un proyecto de una sola persona. Novedades de la 0.4.0: actualizaciones automáticas, cajón de archivos SFTP, reenvío de puertos, pegar imágenes y copiar de forma fiable, reconexión SSH visible y la lista *Necesitan atención*, vista MCP y vista Consumo; cubiertas por tests, servidores falsos, un sshd local y la demo del navegador, pero SFTP, túneles y la subida de imágenes aún no se han usado contra un servidor real desde la ventana de escritorio (ver el [changelog](CHANGELOG.md)). Novedades de la 0.3.0: gráfica de uso, carpetas de hosts SSH, espacios guardados, ficha de agente y sonidos de aviso, probadas con tests y en la demo del navegador, pero aún no con agentes vivos ni un servidor SSH real en la app de escritorio. Novedad de la 0.2.0: la herramienta MCP `run_command`, cubierta por pruebas automáticas con un ejecutor falso y procesos locales reales, pero que el autor **no** ha probado aún contra un servidor SSH real. Qué está verificado y qué no:
 
 - **Verificado con pruebas automáticas**: modelo de la cuadrícula, ajustes, políticas de cuentas, formato de uso, decisión de
   autocompactado, importación de temas, copia de seguridad, diccionarios de i18n (TypeScript); PTY, analizador de `~/.ssh/config`,

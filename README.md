@@ -12,12 +12,12 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4.svg">
-  <img alt="Version 0.3.0" src="https://img.shields.io/badge/version-0.3.0-orange.svg">
+  <img alt="Version 0.4.0" src="https://img.shields.io/badge/version-0.4.0-orange.svg">
 </p>
 
 Orchestra puts your terminals in an adjustable grid on the right and, on the left, a sidebar with your Claude / Codex / opencode
 accounts, your SSH hosts, your local shells and, live, what every AI agent is doing. It is built with Tauri 2 (Rust), Svelte 5 and
-xterm.js: an executable of about 10 MB, no Electron.
+xterm.js: an executable of about 15 MB, no Electron.
 
 ![Orchestra main window (demo data)](docs/screenshots/overview.png)
 
@@ -129,8 +129,8 @@ Get the files from the [Releases](../../releases) page. Two options:
 
 | File | What it is |
 |---|---|
-| `Orchestra_0.3.0_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
-| `Orchestra_0.3.0_x64-portable.exe` | Portable executable (about 10 MB). Put it anywhere and run it. |
+| `Orchestra_0.4.0_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
+| `Orchestra_0.4.0_x64-portable.exe` | Portable executable (about 15 MB). Put it anywhere and run it. |
 
 Notes:
 
@@ -255,7 +255,7 @@ Documentation index: [docs/README.md](docs/README.md).
 
 ## Status and known limitations
 
-Orchestra 0.3.0 (0.1.0 was the first public release) is a one-person project. New in 0.3.0: usage history chart, SSH host folders, saved workspaces, agent card and notification sounds, tested with unit tests and in the browser demo but not yet with live agents or a real SSH server in the desktop build. New in 0.2.0: the MCP `run_command` tool, which is covered by automated tests with a fake runner and real local processes but has **not** been run against a real SSH server by the author yet. What is verified and what is not:
+Orchestra 0.4.0 (0.1.0 was the first public release) is a one-person project. New in 0.4.0: automatic updates, SFTP files drawer, port forwarding, image paste and reliable copy, visible SSH reconnection and the *Need attention* list, MCP view and Consumption view; covered by unit tests, fake servers, a local sshd and the browser demo, but SFTP, tunnels and image upload have not been used yet against a real server from the desktop window (see the [changelog](CHANGELOG.md)). New in 0.3.0: usage history chart, SSH host folders, saved workspaces, agent card and notification sounds, tested with unit tests and in the browser demo but not yet with live agents or a real SSH server in the desktop build. New in 0.2.0: the MCP `run_command` tool, which is covered by automated tests with a fake runner and real local processes but has **not** been run against a real SSH server by the author yet. What is verified and what is not:
 
 - **Verified by automated tests**: grid model, settings, account policies, usage formatting, auto-compact decision, theme import,
   backup, i18n dictionaries (TypeScript); PTY, `~/.ssh/config` parser, token accounting, MCP protocol and security checks, askpass
