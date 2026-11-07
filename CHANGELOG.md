@@ -3,6 +3,14 @@
 All notable changes to Orchestra are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project follows [Semantic Versioning](https://semver.org/) (0.x: anything may change between minor versions).
 
+## [Unreleased]
+
+### Added
+- **Automatic updates** from the GitHub releases (installed version): checks at startup and every 6 hours, shows a notice in the
+  top bar with the release notes, and *Update* downloads the installer, verifies its signature, installs it and restarts
+  Orchestra, warning first if agents are working or SSH sessions are open. Settings → General: turn the automatic check off or
+  *Check now*. The portable exe only offers to open the download page.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

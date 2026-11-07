@@ -41,8 +41,13 @@ fn drain(mut r: impl Read + Send + 'static, cap: usize) -> std::thread::JoinHand
 }
 
 /// Lanza `cmd` (ya construido), espera hasta `timeout` y devuelve lo recogido. Al vencer, mata el proceso.
-pub fn run_process(mut cmd: Command, timeout: Duration, cap: usize) -> RunOutput {
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+pub fn run_process(cmd: Command, timeout: Duration, cap: usize) -> RunOutput {
+    run_process_stdin(cmd, Stdio::null(), timeout, cap)
+}
+
+/// Igual que `run_process`, pero con la entrada estándar que se le dé (p. ej. un archivo que se sube por ssh).
+pub fn run_process_stdin(mut cmd: Command, stdin: Stdio, timeout: Duration, cap: usize) -> RunOutput {
+    cmd.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

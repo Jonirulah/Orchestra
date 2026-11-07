@@ -3,6 +3,7 @@
   // "visible panes only"; it also stops while the window is hidden. All git work is in src-tauri/src/git.rs.
   import { app } from '../lib/store.svelte.ts';
   import { t, tk } from '../lib/i18n.ts';
+  import { copyText } from '../lib/backend.ts';
   import { gitState, refreshGit, forgetGit } from '../lib/gitstate.svelte.ts';
   import { chipText, cwdForPane, gitLevel } from '../lib/gitinfo.ts';
   import type { Pane } from '../lib/model.ts';
@@ -51,7 +52,7 @@
   function copy(e: MouseEvent) {
     e.stopPropagation();
     if (!g?.branch) return;
-    void navigator.clipboard.writeText(g.branch).then(() => app.toast(t('git.chip.copied', { name: g.branch! }))).catch(() => {});
+    void copyText(g.branch).then(() => app.toast(t('git.chip.copied', { name: g.branch! })), (err) => app.toast(t('terminals.copy.failed', { error: String(err) })));
   }
 </script>
 

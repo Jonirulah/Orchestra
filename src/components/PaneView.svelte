@@ -6,8 +6,11 @@
   import { t, tk } from '../lib/i18n.ts';
   import { tokSummary } from '../lib/tokfmt.ts';
   import { fmtMs } from '../lib/latency.ts';
+  import { countdownFrac, fmtClock, fmtDowntime, gaveUpText } from '../lib/sshdrop.ts';
   import Icon from './Icon.svelte';
+  import { files } from '../lib/files.svelte.ts';
   import GitChip from './GitChip.svelte';
+  import PortsChip from './PortsChip.svelte';
 
   let { pane, maximized = false }: { pane: Pane; maximized?: boolean } = $props();
 
@@ -45,6 +48,12 @@
   const badge = $derived(app.conn.view(pane));
   const rc = $derived(app.sshState.reconnecting[pane.id]);
   const flashing = $derived(!!app.sshState.flash[pane.id]);
+  // Aspecto de la caída (sshdrop.ts): velo sobre el terminal, punto ámbar/rojo en la cabecera y franja con el motivo.
+  const down = $derived(app.sshState.down[pane.id]);
+  const gaveUp = $derived(app.sshState.gaveUp[pane.id]);
+  const look = $derived(app.sshLookOf(pane));
+  const dot = $derived(app.sshDotOf(pane));
+  const veil = $derived(app.sshVeiled(pane));
   const unit = $derived(app.settings.latencyShowUnit);
   const latLabel = $derived(badge.mode === 'live' ? fmtMs(badge.stats.last, unit) : '—');
   const latTitle = $derived.by(() => {
@@ -56,12 +65,14 @@
     return `${t('pane.latency.stats', { last: f(s.last), min: f(s.min), avg: f(s.avg), max: f(s.max), loss: s.lossPct, n: s.n })}\n${t('pane.latency.explain')}`;
   });
   $effect(() => {
-    if (!rc || rc.pending) return;
+    if ((!rc || rc.pending) && !down) return;
     clock = Date.now();
     const iv = window.setInterval(() => (clock = Date.now()), 250);
     return () => clearInterval(iv);
   });
   const rcSecs = $derived(rc && !rc.pending ? Math.max(0, Math.ceil((rc.at - clock) / 1000)) : 0);
+  const rcFrac = $derived(rc && !rc.pending ? countdownFrac(rc, clock) : 0);
+  const downFor = $derived(down ? fmtDowntime(Math.max(0, clock - down.since)) : '');
 
   onMount(() => {
     const isNew = T.ensure(pane);
@@ -125,9 +136,10 @@
   onpointerdown={() => app.focus(pane.id)} ondragover={onDragOver} ondragleave={() => (dropOver = false)} ondrop={onDrop}>
 
   <div class="head" draggable="true" ondragstart={onDragStart} ondblclick={() => app.toggleMaximize(pane.id)}>
-    <span class="state" class:run={live?.state === 'running'} class:dead={exited}></span>
+    <span class="state" class:run={live?.state === 'running' && !dot} class:dead={exited && !dot} class:amber={dot === 'amber'} class:red={dot === 'red'}></span>
     <span class="kind"><Icon name={pane.icon} size={13} /></span>
     <span class="title">{pane.title}</span>
+    {#if dot}<span class="sshdown {dot}" title={dot === 'red' ? t('attention.ssh.dotGaveUp') : t('attention.ssh.dotDown')}><Icon name="unplug" size={11} /></span>{/if}
     {#if live?.title && live.title !== pane.title && pane.kind !== 'agent'}<span class="otitle">{live.title}</span>{/if}
     {#if pane.kind !== 'ssh'}<GitChip {pane} />{/if}
     {#if badge.mode === 'jump'}<span class="lat" title={latTitle}><i class="ld"></i>{t('pane.latency.jump')}</span>
@@ -158,6 +170,8 @@
     {/if}
 
     <span class="grow"></span>
+    {#if pane.kind === 'ssh'}<PortsChip {pane} />{/if}
+    {#if pane.kind === 'ssh' && pane.ref && !pane.ref.startsWith('cfg:')}<button class="iconbtn" title={t('files.openTitle')} aria-label={t('files.open')} onclick={() => void files.open(pane.ref!, pane.id)}><Icon name="folder" size={13} /></button>{/if}
     <button class="iconbtn" title={t('pane.searchTitle')} onclick={openSearch}><Icon name="search" size={13} /></button>
     {#if exited}<button class="iconbtn" title={t('pane.restartTitle')} onclick={() => app.restartPane(pane.id)}><Icon name="refresh" size={13} /></button>{/if}
     <button class="iconbtn" title={maximized ? t('pane.restoreTitle') : t('pane.maximizeTitle')} onclick={() => app.toggleMaximize(pane.id)}><Icon name={maximized ? 'restore' : 'max'} size={13} /></button>
@@ -184,11 +198,28 @@
         {#if slow}<span class="cslow">{t('pane.connectingSlow')}</span>{/if}
       </div>
     {/if}
-    {#if rc && !rc.pending}
+    {#if veil}<div class="veil" class:red={look === 'gaveup'} aria-hidden="true"></div>{/if}
+    {#if look === 'waiting' && rc}
       <div class="dead-bar reconnect" role="status" aria-live="polite">
-        <span class="rtext">{rc.max > 0 ? t('pane.reconnect.bar', { s: rcSecs, n: rc.attempt, max: rc.max }) : t('pane.reconnect.barUnlimited', { s: rcSecs, n: rc.attempt })}</span>
+        <span class="prog" style:width="{rcFrac * 100}%" aria-hidden="true"></span>
+        <span class="ricon"><Icon name="unplug" size={15} /></span>
+        <span class="rtext"><b>{rc.max > 0 ? t('pane.reconnect.bar', { s: rcSecs, n: rc.attempt, max: rc.max }) : t('pane.reconnect.barUnlimited', { s: rcSecs, n: rc.attempt })}</b>{#if downFor}<small>{t('attention.ssh.downFor', { dur: downFor })}</small>{/if}</span>
         <button class="btn" onclick={() => app.conn.reconnectNow(pane.id)}><Icon name="refresh" size={13} /> {t('pane.reconnect.now')}</button>
         <button class="btn ghost" onclick={() => app.conn.cancel(pane.id)}>{t('pane.reconnect.cancel')}</button>
+      </div>
+    {:else if (look === 'retrying' || look === 'deciding') && down}
+      <div class="dead-bar reconnect" role="status" aria-live="polite">
+        <span class="prog indet" aria-hidden="true"></span>
+        <span class="ricon"><Icon name="unplug" size={15} /></span>
+        <span class="rtext"><b>{t('attention.ssh.retrying', { n: down.attempt ?? 1 })}</b>{#if downFor}<small>{t('attention.ssh.downFor', { dur: downFor })}</small>{/if}</span>
+        <button class="btn ghost" onclick={() => app.conn.cancel(pane.id)}>{t('pane.reconnect.cancel')}</button>
+      </div>
+    {:else if look === 'gaveup' && gaveUp}
+      <div class="dead-bar gaveup" role="alert">
+        <span class="ricon"><Icon name="unplug" size={15} /></span>
+        <span class="rtext"><b>{gaveUpText(gaveUp)}</b><small>{t('attention.ssh.gaveUpWhen', { time: fmtClock(gaveUp.at), dur: fmtDowntime(gaveUp.at - gaveUp.since) })}</small></span>
+        <button class="btn" onclick={() => app.restartPane(pane.id)}><Icon name="refresh" size={13} /> {t('attention.ssh.restart')}</button>
+        <button class="btn ghost" onclick={() => app.closePane(pane.id)}>{t('attention.ssh.close')}</button>
       </div>
     {:else if exited && !rc}
       <div class="dead-bar">
@@ -226,8 +257,25 @@
   .pane.flash .head { animation: orch-flash 1.5s ease-out; }
   @keyframes orch-flash { 0% { background: color-mix(in srgb, var(--ok) 38%, var(--panel)); } 100% { background: var(--panel); } }
   @media (prefers-reduced-motion: reduce) { .pane.flash .head { animation: none; background: color-mix(in srgb, var(--ok) 22%, var(--panel)); } }
-  .dead-bar.reconnect { background: rgba(232, 165, 60, 0.12); border-top-color: rgba(232, 165, 60, 0.45); color: var(--text); }
-  .dead-bar .rtext { flex: 1; min-width: 0; }
+  .dead-bar.reconnect { background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border-top-color: color-mix(in srgb, var(--warn) 55%, transparent); color: var(--text); }
+  .dead-bar.gaveup { background: color-mix(in srgb, var(--bad) 16%, var(--panel)); border-top-color: color-mix(in srgb, var(--bad) 60%, transparent); color: var(--text); }
+  .dead-bar .rtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .dead-bar .rtext b { font-weight: 600; font-size: 12.5px; }
+  .dead-bar .rtext small { color: var(--muted); font-size: 11px; }
+  .dead-bar .ricon { display: grid; color: var(--warn); flex: none; }
+  .dead-bar.gaveup .ricon { color: var(--bad); }
+  /* Barra fina de la cuenta atrás, pegada al borde de arriba de la franja. */
+  .dead-bar .prog { position: absolute; left: 0; top: -1px; height: 2px; background: var(--warn); transition: width 0.25s linear; }
+  .dead-bar .prog.indet { width: 30%; animation: orch-indet 1.2s ease-in-out infinite; }
+  @keyframes orch-indet { 0% { left: -30%; } 100% { left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .dead-bar .prog { transition: none; } .dead-bar .prog.indet { animation: none; left: 0; width: 100%; opacity: 0.5; } }
+  /* Velo sobre el terminal congelado: atenúa sin tapar la franja (z 4) y deja seleccionar y copiar. */
+  .veil { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: grayscale(0.7); }
+  .state.amber { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); }
+  .state.red { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent); }
+  .sshdown { display: inline-grid; place-items: center; width: 18px; height: 16px; border-radius: 5px; flex: none; }
+  .sshdown.amber { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+  .sshdown.red { color: var(--bad); background: color-mix(in srgb, var(--bad) 16%, transparent); }
   .agb.busy { color: var(--accent); background: var(--accent-soft); }
   .agb.waiting { color: #1a0a0b; background: var(--bad); font-weight: 600; }
   .acct-wrap { position: relative; }

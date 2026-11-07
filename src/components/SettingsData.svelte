@@ -28,7 +28,7 @@
 
   async function copyJson() {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(snapshot(), null, 2));
+      await be.copyText(JSON.stringify(snapshot(), null, 2));
       msg = { ok: true, text: t('settings.data.copied') };
     } catch (e) {
       msg = { ok: false, text: t('settings.data.copyFailed', { error: String(e) }) };
@@ -74,7 +74,7 @@
   }
   async function copyBackup() {
     try {
-      await navigator.clipboard.writeText(backupJson());
+      await be.copyText(backupJson());
       bMsg = { ok: true, text: t('settings.data.backup.copied') };
     } catch (e) {
       bMsg = { ok: false, text: t('settings.data.backup.copyFailed', { error: String(e) }) };

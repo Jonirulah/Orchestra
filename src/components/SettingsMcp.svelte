@@ -35,7 +35,7 @@
 
   async function copy(text: string, okText: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await be.copyText(text);
       msg = { ok: true, text: okText };
     } catch (e) {
       msg = { ok: false, text: t('settings.mcp.copyFailed', { error: String(e) }) };

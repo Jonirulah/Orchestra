@@ -107,7 +107,7 @@ Get the files from the [Releases](../../releases) page. Two options:
 | File | What it is |
 |---|---|
 | `Orchestra_0.3.0_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
-| `Orchestra.exe` | Portable executable (about 10 MB). Put it anywhere and run it. |
+| `Orchestra_0.3.0_x64-portable.exe` | Portable executable (about 10 MB). Put it anywhere and run it. |
 
 Notes:
 
@@ -115,6 +115,9 @@ Notes:
   if it is missing, install it from Microsoft ("Evergreen Runtime").
 - **The binaries are not code-signed**, so Windows SmartScreen may warn ("Windows protected your PC"). If you downloaded the file
   from this repository's Releases page, choose *More info → Run anyway*.
+- **Updates:** the installed version checks the Releases page at startup and every 6 hours (Settings → General, can be turned
+  off) and shows a notice when there is a new version. *Update* downloads the installer, checks its signature, installs it and
+  restarts Orchestra; your panels and Claude sessions are restored. The portable exe only offers to open the download page.
 - For SSH you need the OpenSSH client (`ssh.exe`, an optional Windows feature that is usually already installed). For the git chip
   you need `git` on the `PATH`. For agents you need the agent's own CLI (`claude`, `codex`, `opencode`) on the `PATH`.
 - **Where your data lives:** `%APPDATA%\dev.orchestra.app\` (`state.json`, `quota\`, `mcp\`, `bin\`). Set the environment variable

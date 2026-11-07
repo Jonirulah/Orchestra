@@ -1,12 +1,16 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte.ts';
   import { PRESETS, displayName } from '../lib/model.ts';
+  import type { Workspace } from '../lib/model.ts';
+  import { waitingPerWs } from '../lib/attention.ts';
+  import { worstDot } from '../lib/sshdrop.ts';
   import { t } from '../lib/i18n.ts';
   import { ctxmenu } from '../lib/ctxmenu.svelte.ts';
   import { sep } from '../lib/ctxmenu.ts';
   import type { MenuItem } from '../lib/ctxmenu.ts';
   import Icon from './Icon.svelte';
   import SavedWorkspaces from './SavedWorkspaces.svelte';
+  import UpdateChip from './UpdateChip.svelte';
 
   let pickerOpen = $state(false);
   let editing = $state<string | null>(null);
@@ -14,6 +18,9 @@
   let customRows = $state(2);
 
   const ws = $derived(app.active);
+  // Agentes que esperan por pestaña y punto de caída SSH de los paneles de OTRAS pestañas (attention.ts / sshdrop.ts).
+  const waitPerWs = $derived(waitingPerWs(app.workspaces, app.waitingIds));
+  const sshDotWs = (w: Workspace) => (w.id === app.activeId ? null : worstDot(w.panes.map((p) => app.sshDotOf(p))));
 
   function pick(c: number, r: number) {
     app.setLayout(c, r);
@@ -73,9 +80,12 @@
           <input class="rename" value={w.name} use:focusOnMount onblur={(e) => finishRename(w.id, e)}
             onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') editing = null; }} />
         {:else}
+          {@const sd = sshDotWs(w)}
           <button class="tname" onclick={() => app.switchWorkspace(w.id)} ondblclick={() => (editing = w.id)} title={t('topbar.renameTitle')}
             onkeydown={(e) => onTabKey(w.id, e)} oncontextmenu={(e) => ctxmenu.openFromEvent(e, tabMenu(w.id), e.currentTarget as HTMLElement)}>
+            {#if sd}<span class="tdot {sd}" title={sd === 'red' ? t('attention.ssh.dotGaveUp') : t('attention.ssh.dotDown')}><Icon name="unplug" size={10} /></span>{/if}
             {displayName(w.name)}<span class="cnt">{w.panes.length}</span>
+            {#if waitPerWs[w.id]}<span class="wcnt" title={t('attention.tab.waiting', { n: waitPerWs[w.id] })}><Icon name="bell" size={10} />{waitPerWs[w.id]}</span>{/if}
           </button>
           {#if app.workspaces.length > 1}
             <button class="iconbtn x" title={t('topbar.closeWorkspaceTitle')} onclick={() => app.closeWorkspace(w.id)}><Icon name="x" size={12} /></button>
@@ -88,6 +98,8 @@
   </div>
 
   <span class="grow"></span>
+
+  <UpdateChip />
 
   <div class="picker-wrap">
     <button class="btn" onclick={() => (pickerOpen = !pickerOpen)} title={t('topbar.gridLayoutTitle')}>
@@ -153,6 +165,10 @@
   .tabs { display: flex; align-items: center; gap: 3px; min-width: 0; overflow-x: auto; }
   .tab { display: flex; align-items: center; border-radius: 6px; border: 1px solid transparent; }
   .tab.on { background: var(--raise); border-color: var(--border-strong); }
+  .wcnt { display: inline-flex; align-items: center; gap: 2px; margin-left: 5px; padding: 0 5px 0 4px; border-radius: 8px; font-size: 10px; font-weight: 700; line-height: 15px; color: #1a0a0b; background: var(--bad); font-variant-numeric: tabular-nums; }
+  .tdot { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 4px; border-radius: 50%; vertical-align: -3px; }
+  .tdot.amber { color: var(--warn); background: color-mix(in srgb, var(--warn) 18%, transparent); }
+  .tdot.red { color: var(--bad); background: color-mix(in srgb, var(--bad) 18%, transparent); }
   .tname { padding: 5px 4px 5px 11px; color: var(--muted); white-space: nowrap; display: flex; gap: 7px; align-items: center; }
   .tab.on .tname { color: var(--text); }
   .cnt { font-size: 10.5px; background: #2a313b; border-radius: 9px; padding: 0 6px; color: var(--muted); }

@@ -18,6 +18,8 @@ export default {
   'settings.terminal.scrollbackHint': 'Consume RAM en cada terminal: unos 14 MB por cada 10 000 líneas con 120 columnas.',
   'settings.terminal.copyOnSelectLabel': 'Copiar al seleccionar',
   'settings.terminal.copyOnSelectHint': 'Al seleccionar texto, se copia al portapapeles.',
+  'settings.terminal.pasteImagesLabel': 'Pegar imágenes del portapapeles',
+  'settings.terminal.pasteImagesHint': 'Ctrl+V con una imagen: Claude Code la recibe como adjunto ([Image #1]); Codex, opencode y las shells reciben la ruta de un PNG guardado; los paneles SSH la suben a ~/.cache/orchestra-paste. También puedes soltar archivos de imagen en un panel.',
   'settings.terminal.rightClickLabel': 'Clic derecho',
   'settings.terminal.rightClickHint': 'Copiar/pegar copia la selección si la hay y, si no, pega.',
   'settings.terminal.rightSmart': 'Copiar/pegar',

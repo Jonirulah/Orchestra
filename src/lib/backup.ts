@@ -149,7 +149,7 @@ function scrub<T>(v: T): T {
 
 // Si alguien añade un campo a Host o Account y no lo apunta aquí, svelte-check lo dice (la copia lo perdería en silencio).
 const HOST_KEYS = ['id', 'name', 'group', 'tags', 'color', 'host', 'user', 'port', 'authMethod', 'identityFile', 'hasPassword', 'hasPassphrase',
-  'hostKeyPolicy', 'proxyJump', 'command', 'tmux', 'remoteMetrics', 'notes', 'agentAccess'] as const satisfies readonly (keyof Host)[];
+  'hostKeyPolicy', 'proxyJump', 'command', 'tmux', 'remoteMetrics', 'forwards', 'notes', 'agentAccess'] as const satisfies readonly (keyof Host)[];
 const ACCOUNT_KEYS = ['id', 'name', 'dir', 'isDefault', 'color', 'provider'] as const satisfies readonly (keyof Account)[];
 const _hostKeysComplete: Exclude<keyof Host, (typeof HOST_KEYS)[number]> extends never ? true : never = true;
 const _accountKeysComplete: Exclude<keyof Account, (typeof ACCOUNT_KEYS)[number]> extends never ? true : never = true;
@@ -294,6 +294,8 @@ function sanitizeHost(raw: unknown): Host | null {
     agentAccess: ACCESS.includes(raw.agentAccess as AgentAccess) ? raw.agentAccess : 'none',
     tmux: raw.tmux === true ? true : undefined,
     remoteMetrics: raw.remoteMetrics === true ? true : undefined,
+    // Reenvíos de puertos guardados: solo números (normalizeHost los valida).
+    forwards: raw.forwards,
     hostKeyPolicy: raw.hostKeyPolicy,
   };
   if (user) base.user = user;

@@ -2,6 +2,7 @@
 
 mod accounts;
 mod agents;
+mod clipimg;
 mod commands;
 mod git;
 mod history;
@@ -11,15 +12,18 @@ mod mcp;
 mod mcp_exec;
 mod metrics;
 mod net;
+mod portfwd;
 mod providers;
 mod pty;
 mod quota;
 mod remote_metrics;
+mod sftp;
 mod shells;
 mod sshcfg;
 mod store;
 mod subtranscript;
 mod tokens;
+mod updater;
 mod usage_query;
 mod vault;
 
@@ -70,6 +74,12 @@ fn main() {
         }
     }
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(std::sync::Arc::new(sftp::Manager::default()))
+        .manage(updater::Pending::default())
         .manage(pty::PtyManager::default())
         .manage(Prefs {
             close_to_tray: AtomicBool::new(true),
@@ -133,12 +143,36 @@ fn main() {
             remote_metrics::rmetrics_sample,
             remote_metrics::rmetrics_hidden,
             remote_metrics::rmetrics_history,
+            portfwd::pfwd_start,
+            portfwd::pfwd_stop,
+            portfwd::pfwd_list,
+            sftp::sftp_list,
+            sftp::sftp_stat,
+            sftp::sftp_mkdir,
+            sftp::sftp_rename,
+            sftp::sftp_remove,
+            sftp::sftp_upload,
+            sftp::sftp_download,
+            sftp::sftp_cancel,
+            sftp::sftp_downloads_dir,
+            sftp::sftp_pick,
+            sftp::sftp_reveal,
+            clipimg::clipboard_image_info,
+            clipimg::clipboard_image_to_file,
+            clipimg::clipboard_write_text,
+            clipimg::ssh_upload_image,
+            updater::update_env,
+            updater::update_check,
+            updater::update_install,
         ])
         .setup(|app| {
             app.manage(mcp::McpManager::new(app.handle()));
             let rm = remote_metrics::Manager::new(std::sync::Arc::new(remote_metrics::SshLauncher), Default::default());
             remote_metrics::spawn_reaper(&rm);
             app.manage(rm);
+            app.manage(portfwd::Manager::new(std::sync::Arc::new(portfwd::SshSpawner), Default::default()));
+            clipimg::cleanup_on_start(app.handle());
+            clipimg::install_drop_bridge(app.handle());
             let menu = tray_menu(app.handle(), TRAY_SHOW, TRAY_QUIT)?;
             let mut tray = TrayIconBuilder::with_id("main")
                 .tooltip("Orchestra")
@@ -185,6 +219,13 @@ fn main() {
                     m.shutdown();
                 }
                 if let Some(m) = app.try_state::<std::sync::Arc<remote_metrics::Manager>>() {
+                    m.shutdown();
+                }
+                if let Some(m) = app.try_state::<std::sync::Arc<sftp::Manager>>() {
+                    m.shutdown();
+                }
+                // Túneles SSH: se matan todos sus ssh (ninguno queda huérfano).
+                if let Some(m) = app.try_state::<std::sync::Arc<portfwd::Manager>>() {
                     m.shutdown();
                 }
             }

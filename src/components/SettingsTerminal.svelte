@@ -5,6 +5,7 @@
   import type { ThemeDef } from '../lib/themes.ts';
   import { MAX_INPUT_BYTES, exportTheme, parseTheme, slugOf } from '../lib/themeimport.ts';
   import { t } from '../lib/i18n.ts';
+  import { copyText } from '../lib/backend.ts';
   import { isFontInstalled } from '../lib/fontcheck.ts';
   import Seg from './Seg.svelte';
   import Toggle from './Toggle.svelte';
@@ -110,7 +111,7 @@
   async function copyCurrent() {
     if (!current) return;
     try {
-      await navigator.clipboard.writeText(exportTheme(current));
+      await copyText(exportTheme(current));
       msg = { ok: true, text: t('settings.terminal.jsonCopied'), details: [] };
     } catch (e) {
       msg = { ok: false, text: t('settings.terminal.copyFailed'), details: [String(e)] };
@@ -204,6 +205,11 @@
 <div class="s-row">
   <div class="lbl"><b>{t('settings.terminal.copyOnSelectLabel')}</b><small>{t('settings.terminal.copyOnSelectHint')}</small></div>
   <div class="ctl"><Toggle value={s.copyOnSelect} label={t('settings.terminal.copyOnSelectLabel')} onchange={(v) => app.setting('copyOnSelect', v)} /></div>
+</div>
+
+<div class="s-row">
+  <div class="lbl"><b>{t('settings.terminal.pasteImagesLabel')}</b><small>{t('settings.terminal.pasteImagesHint')}</small></div>
+  <div class="ctl"><Toggle value={s.pasteImages} label={t('settings.terminal.pasteImagesLabel')} onchange={(v) => app.setting('pasteImages', v)} /></div>
 </div>
 
 <div class="s-row">

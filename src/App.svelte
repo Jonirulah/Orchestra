@@ -13,6 +13,8 @@
   import McpApproval from './components/McpApproval.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import SubagentDrawer from './components/SubagentDrawer.svelte';
+  import FilesDrawer from './components/FilesDrawer.svelte';
+  import PortForwards from './components/PortForwards.svelte';
 
   onMount(() => { void app.init(); });
 
@@ -56,6 +58,8 @@
   {#if app.mcpApprovals.length}<McpApproval />{/if}
   <ContextMenu />
   <SubagentDrawer />
+  <FilesDrawer />
+  <PortForwards />
   {#if app.toastMsg}<div class="toast">{app.toastMsg}</div>{/if}
   {/key}
 {:else}

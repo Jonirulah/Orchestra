@@ -1,6 +1,6 @@
 // Menú contextual de una cuenta con las acciones reales de la app. Lo usan la barra lateral y Ajustes → Cuentas.
 import { app } from './store.svelte.ts';
-import { openAccountDir } from './backend.ts';
+import { copyText, openAccountDir } from './backend.ts';
 import { accountMenu } from './ctxitems.ts';
 import type { AccountMenuCtx } from './ctxitems.ts';
 import { providerOf } from './model.ts';
@@ -9,7 +9,7 @@ import type { MenuItem } from './ctxmenu.ts';
 import { t } from './i18n.ts';
 
 async function copyPath(dir: string): Promise<void> {
-  try { await navigator.clipboard.writeText(dir); app.toast(t('ctx.account.pathCopied')); }
+  try { await copyText(dir); app.toast(t('ctx.account.pathCopied')); }
   catch { app.toast(t('ctx.account.copyFailed')); }
 }
 

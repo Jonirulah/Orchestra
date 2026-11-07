@@ -1,6 +1,6 @@
 import { test, mock, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { SshConn } from './sshconn.ts';
+import { CONFIRM_MS, SshConn } from './sshconn.ts';
 import type { ConnCtx, ConnSettings, ConnState, LiveLike, PingRes } from './sshconn.ts';
 import { DEFAULTS } from './settings.ts';
 import { emptyHost } from './model.ts';
@@ -23,6 +23,8 @@ interface Rig {
   live: Map<string, LiveLike>;
   restarts: string[];
   toasts: string[];
+  /** Vueltas confirmadas: [id, duración de la caída en ms]. */
+  backs: [string, number][];
   pings: PingTarget[][];
   timeouts: number[];
   tail: { text: string };
@@ -43,7 +45,7 @@ function rig(opts: Partial<ConnSettings> = {}, ids = ['a']): Rig {
     live.set(id, { state: 'running', startedAt: Date.now() - 600_000, firstOutputAt: Date.now() - 590_000 });
   }
   const r = {
-    st: { latency: {}, reconnecting: {}, flash: {} } as ConnState, s, panes, live, restarts: [] as string[], toasts: [] as string[],
+    st: { latency: {}, reconnecting: {}, flash: {}, down: {}, gaveUp: {} } as ConnState, s, panes, live, restarts: [] as string[], toasts: [] as string[], backs: [] as [string, number][],
     pings: [] as PingTarget[][], timeouts: [] as number[], tail: { text: '' }, clock: { now: 0, visible: true },
     pingImpl: { fn: (t: PingTarget[]): PingRes[] => t.map((x) => ({ id: x.id, ms: 25, error: null })) },
   } as unknown as Rig;
@@ -56,6 +58,7 @@ function rig(opts: Partial<ConnSettings> = {}, ids = ['a']): Rig {
     live: (id) => live.get(id),
     restart: (id) => { r.restarts.push(id); live.set(id, { state: 'starting', startedAt: Date.now() }); },
     toast: (m) => r.toasts.push(m),
+    reconnected: (id, _at, downMs) => r.backs.push([id, downMs]),
     tailText: async () => r.tail.text,
     ping: async (t, to) => { r.pings.push(t); r.timeouts.push(to); return r.pingImpl.fn(t); },
     pageVisible: () => r.clock.visible,
@@ -272,6 +275,8 @@ test('flash: only on the first output of an automatic retry, and only if the set
   await drop(r, 'a');
   mock.timers.tick(2000);
   r.conn.outputSeen('a');
+  assert.equal(r.st.flash.a, undefined, 'not before the retry is confirmed');
+  mock.timers.tick(CONFIRM_MS);
   assert.ok(r.st.flash.a);
   mock.timers.tick(2000);
   assert.equal(r.st.flash.a, undefined, 'goes away by itself');
@@ -279,6 +284,7 @@ test('flash: only on the first output of an automatic retry, and only if the set
   await drop(off, 'a');
   mock.timers.tick(2000);
   off.conn.outputSeen('a');
+  mock.timers.tick(CONFIRM_MS);
   assert.equal(off.st.flash.a, undefined);
 });
 
@@ -419,4 +425,89 @@ test('overlapping ticks are skipped while one is in flight', async () => {
   release();
   await p1;
   assert.equal(r.st.latency.a.length, 1);
+});
+
+// ---------- aspecto de la caída (velo, separador, franja roja) ----------
+
+test('down: from the first drop until the retry stays alive CONFIRM_MS; then the separator gets the downtime', async () => {
+  const r = rig();
+  await drop(r, 'a');
+  assert.ok(r.st.down.a, 'down while counting down');
+  const since = r.st.down.a.since;
+  mock.timers.tick(2000); // intento 1: falla rápido escribiendo una línea
+  r.conn.outputSeen('a');
+  r.live.set('a', { state: 'exited', startedAt: Date.now(), firstOutputAt: Date.now() });
+  await r.conn.onExit('a', 255);
+  mock.timers.tick(CONFIRM_MS);
+  assert.deepEqual(r.backs, [], 'a retry that printed an error and exited is not a reconnection');
+  assert.equal(r.st.down.a.since, since, 'the streak keeps its start');
+  mock.timers.tick(4000); // intento 2: conecta
+  r.live.set('a', { state: 'running', startedAt: Date.now(), firstOutputAt: Date.now() });
+  r.conn.outputSeen('a');
+  assert.ok(r.st.down.a, 'still down until confirmed');
+  mock.timers.tick(CONFIRM_MS);
+  assert.equal(r.st.down.a, undefined);
+  assert.equal(r.backs.length, 1);
+  assert.equal(r.backs[0][1], 2000 + CONFIRM_MS + 4000 + CONFIRM_MS);
+});
+
+test('a normal first connection writes no separator', () => {
+  const r = rig();
+  r.conn.outputSeen('a');
+  mock.timers.tick(CONFIRM_MS * 2);
+  assert.deepEqual(r.backs, []);
+});
+
+test('gave up after max attempts: red bar with the readable cause; Restart clears it', async () => {
+  const r = rig({ sshReconnectMaxAttempts: 2 });
+  await drop(r, 'a');
+  mock.timers.tick(2000);
+  r.tail.text = 'ssh: connect to host a.example.com port 22: Connection timed out';
+  r.live.set('a', { state: 'exited', startedAt: Date.now() });
+  await r.conn.onExit('a', 255);
+  mock.timers.tick(4000);
+  r.live.set('a', { state: 'exited', startedAt: Date.now() });
+  await r.conn.onExit('a', 255);
+  assert.equal(r.st.down.a, undefined);
+  assert.equal(r.st.gaveUp.a.cause, 'timeout');
+  assert.equal(r.st.gaveUp.a.attempt, 2);
+  r.conn.userRestarted('a');
+  assert.equal(r.st.gaveUp.a, undefined);
+});
+
+test('gave up on an auth failure in the middle of a streak; a failed FIRST start is not a drop', async () => {
+  const r = rig();
+  await drop(r, 'a');
+  mock.timers.tick(2000);
+  r.tail.text = 'user@a: Permission denied (publickey).';
+  r.live.set('a', { state: 'exited', startedAt: Date.now() });
+  await r.conn.onExit('a', 255);
+  assert.equal(r.st.gaveUp.a.cause, 'auth');
+  const fresh = rig();
+  fresh.tail.text = 'user@a: Permission denied (publickey).';
+  fresh.live.set('a', { state: 'exited', startedAt: Date.now(), firstOutputAt: Date.now() });
+  await fresh.conn.onExit('a', 255);
+  assert.equal(fresh.st.gaveUp.a, undefined);
+  assert.equal(fresh.st.down.a, undefined);
+});
+
+test('hidden while counting down: says why instead of going quiet; Cancel and close leave nothing', async () => {
+  const r = rig();
+  await drop(r, 'a');
+  r.panes.get('a')!.visible = false;
+  mock.timers.tick(2000);
+  assert.deepEqual(r.restarts, []);
+  assert.equal(r.st.gaveUp.a.cause, 'paused');
+  assert.equal(r.st.down.a, undefined);
+  const c = rig();
+  await drop(c, 'a');
+  c.conn.cancel('a');
+  assert.equal(c.st.down.a, undefined);
+  assert.equal(c.st.gaveUp.a, undefined);
+  await drop(c, 'a'); // cancelado: no reintenta ni marca nada
+  assert.equal(c.st.gaveUp.a, undefined);
+  const x = rig();
+  await drop(x, 'a');
+  x.conn.closed('a');
+  assert.deepEqual([x.st.down.a, x.st.gaveUp.a, x.st.reconnecting.a], [undefined, undefined, undefined]);
 });

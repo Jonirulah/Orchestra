@@ -2,5 +2,5 @@
   "identifier": "default",
   "description": "Permisos de la ventana principal",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-request-user-attention", "notification:default"]
 }

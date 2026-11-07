@@ -96,7 +96,7 @@
               <h4 class="s-group">{t(g.titleKey)}</h4>
               <table class="s-keys">
                 <tbody>
-                  {#each g.items as it (it.keys)}
+                  {#each g.items as it (it.whatKey)}
                     <tr><td class="k">{#each it.keys.split('  /  ') as part, i (i)}{#if i > 0}<span class="or">{t('settings.dialog.or')}</span>{/if}<kbd>{comboText(part)}</kbd>{/each}</td><td>{t(it.whatKey)}</td></tr>
                   {/each}
                 </tbody>

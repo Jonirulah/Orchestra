@@ -7,6 +7,7 @@
   import Toggle from './Toggle.svelte';
   import Icon from './Icon.svelte';
   import SettingsStatusBar from './SettingsStatusBar.svelte';
+  import SettingsUpdates from './SettingsUpdates.svelte';
 
   const s = $derived(app.settings);
   // Los nombres de idioma se escriben en su propio idioma (así se reconocen aunque la interfaz esté en otro).
@@ -26,6 +27,9 @@
     <Seg value={s.language} options={LANG_OPTIONS} onchange={(v) => app.setting('language', v)} />
   </div>
 </div>
+
+<!-- Actualizaciones automáticas (componente propio: SettingsUpdates.svelte) -->
+<SettingsUpdates />
 
 <div class="s-row">
   <div class="lbl">

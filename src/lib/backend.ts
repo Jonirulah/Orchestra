@@ -27,14 +27,60 @@ const enc = new TextEncoder();
 const demoCwd = new Map<string, string>();
 function demoOut(id: string, s: string) { demo.get(id)?.(enc.encode(s)); }
 
+// Demo de la caída SSH: `?drop=N` hace que cada panel SSH de la demo se caiga a los N s de conectar (una vez), falle el
+// 1.er reintento y vuelva en el 2.º. `&dropfail=1` = la red no vuelve (se rinde por intentos); `&dropfail=auth` = el
+// 2.º reintento lo rechaza el servidor (se rinde por autenticación). Solo en el navegador, nunca en la app.
+const demoSsh = new Set<string>();
+const demoAttaches = new Map<string, number>();
+function demoParam(k: string): string | null { return typeof location === 'undefined' ? null : new URLSearchParams(location.search).get(k); }
+/** Segundos de `?drop=` (0 = apagado; mínimo 2). Siempre 0 dentro de Tauri. */
+export function demoDrop(): number {
+  if (inTauri) return 0;
+  const n = Number(demoParam('drop')) || 0;
+  return n > 0 ? Math.max(2, Math.min(n, 600)) : 0;
+}
+/** Ajustes de reconexión que usa la demo con `?drop=`: la sesión cuenta como establecida, y los reintentos se ven sin esperar minutos. */
+export function demoDropSettings(s: { sshReconnectMaxAttempts: number }): { sshAutoReconnect: true; sshReconnectMinUpSec: number; sshReconnectFirstDelaySec: number; sshReconnectFactor: number; sshReconnectMaxAttempts: number } {
+  return {
+    sshAutoReconnect: true, sshReconnectMinUpSec: demoDrop() - 1, sshReconnectFirstDelaySec: 5, sshReconnectFactor: 1.2,
+    sshReconnectMaxAttempts: demoParam('dropfail') === '1' ? 3 : s.sshReconnectMaxAttempts,
+  };
+}
+function demoExitNow(id: string, code: number) { for (const cb of demoExit) cb(id, code); }
+/** Un panel SSH de la demo con `?drop=`: conecta, se cae, falla, vuelve (o no). */
+function demoSshAttach(id: string, dropSec: number): void {
+  const n = demoAttaches.get(id) ?? 0;
+  demoAttaches.set(id, n + 1);
+  const ok = () => demoOut(id, '\x1b[2mLinux demo-host 6.8.0 x86_64\x1b[0m\r\nLast login: Sat Nov  7 17:04:11 2026 from 10.0.0.5\r\n\x1b[32mdemo@demo-host\x1b[0m:\x1b[34m~\x1b[0m$ ');
+  const fail = (msg: string) => setTimeout(() => {
+    if (!demo.has(id)) return;
+    demoOut(id, msg + '\r\n');
+    setTimeout(() => demoExitNow(id, 255), 300);
+  }, 700);
+  if (n === 0) {
+    ok();
+    setTimeout(() => {
+      if (!demo.has(id)) return;
+      demoOut(id, '\r\nclient_loop: send disconnect: Connection reset\r\n');
+      demoExitNow(id, 255);
+    }, dropSec * 1000);
+    return;
+  }
+  const mode = demoParam('dropfail');
+  if (mode === 'auth' && n >= 2) { fail('demo@demo-host: Permission denied (publickey,password).'); return; }
+  if (mode || n === 1) { fail('ssh: connect to host demo-host port 22: Connection timed out'); return; }
+  ok();
+}
+
 export async function ptySpawn(spec: SpawnSpec): Promise<number> {
-  if (!inTauri) { if (spec.cwd) demoCwd.set(spec.id, spec.cwd); return 0; }
+  if (!inTauri) { if (spec.cwd) demoCwd.set(spec.id, spec.cwd); if (spec.program === 'ssh') demoSsh.add(spec.id); return 0; }
   return invoke<number>('pty_spawn', { spec });
 }
 
 export async function ptyAttach(id: string, onData: (b: Uint8Array) => void): Promise<number | null> {
   if (!inTauri) {
     demo.set(id, onData);
+    if (demoSsh.has(id) && demoDrop() > 0) { demoSshAttach(id, demoDrop()); return null; }
     // `?slow=3000` en la URL de la demo retrasa la primera salida: sirve para ver el aviso «conectando…» de los paneles SSH.
     const slow = Number(new URLSearchParams(location.search).get('slow')) || 0;
     // La demo también «avisa» de su carpeta (OSC 9;9) para ejercitar el manejador real de xterm (etiqueta de git).
@@ -42,6 +88,8 @@ export async function ptyAttach(id: string, onData: (b: Uint8Array) => void): Pr
     const osc = demoCwd.has(id) ? `\x1b]9;9;${dirs[[...demoCwd.keys()].indexOf(id) % dirs.length]}\x07` : '';
     const first = () => demoOut(id, `\x1b[33mOrchestra · demo mode (no backend)\x1b[0m\r\n$ ${osc}`);
     if (slow > 0) setTimeout(first, Math.min(slow, 60000)); else first();
+    // Panel SSH de la demo: un servidor de desarrollo «arranca» en el remoto (aviso de puerto detectado; ver portdetect.ts).
+    if (demoSsh.has(id)) setTimeout(() => demoOut(id, 'npm run dev\r\n\r\n  \x1b[32m\x1b[1mVITE\x1b[22m v5.4.2\x1b[39m  \x1b[2mready in \x1b[0m\x1b[1m312\x1b[22m\x1b[2m\x1b[0m ms\r\n\r\n  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://localhost:\x1b[1m5173\x1b[22m/\x1b[39m\r\n  \x1b[32m➜\x1b[39m  \x1b[1mNetwork\x1b[22m: \x1b[2muse \x1b[22m\x1b[1m--host\x1b[22m\x1b[2m to expose\x1b[22m\r\n'), Math.max(slow, 0) + 1500);
     return null;
   }
   const ch = new Channel<ArrayBuffer | number[]>();
@@ -296,6 +344,21 @@ if (!inTauri && typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__orchestraDemoPingCalls = () => demoPingCalls.n;
 }
 
+/** Parpadeo del botón de la barra de tareas hasta que la ventana pase delante. Nunca lanza; en la demo no hace nada. */
+export async function requestAttention(): Promise<void> {
+  if (!inTauri) return;
+  try {
+    const { getCurrentWindow, UserAttentionType } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().requestUserAttention(UserAttentionType.Informational);
+  } catch { /* sin permiso o sin ventana: no pasa nada */ }
+}
+
+/** Notificación del sistema (Windows: notificación del centro de actividades, plugin notification). Nunca lanza. */
+export async function notify(title: string, body: string): Promise<void> {
+  if (!inTauri) { (globalThis as Record<string, unknown>).__orchestraLastNotify = { title, body }; return; }
+  try { await invoke('plugin:notification|notify', { options: { title, body } }); } catch { /* sin plugin o sin permiso */ }
+}
+
 export async function prepareClaudeDir(dir: string): Promise<void> {
   if (inTauri) await invoke('prepare_claude_dir', { dir });
 }
@@ -347,17 +410,19 @@ export async function claudeSessionExists(dir: string, id: string): Promise<bool
 }
 export async function agentScan(ids: string[], dirs: string[]): Promise<AgentInfo[]> {
   if (inTauri) return invoke('agent_scan', { ids, dirs });
-  // Modo demo: datos de ejemplo para los dos primeros paneles.
+  // Modo demo: datos de ejemplo para los dos primeros paneles. `?agents=N` = los N primeros; `?waiting=0,2` = cuáles esperan.
   const now = Math.floor(Date.now() / 1000);
-  return ids.slice(0, 2).map((id, i): AgentInfo => ({
-    paneId: id, agent: 'claude', pid: 1000 + i, status: i === 0 ? 'busy' : 'waiting',
-    title: i === 0 ? 'Maps -3-4-5-6' : 'SSH terminal manager', cwd: i === 0 ? 'C:/Users/demo/code/maps' : 'C:/Users/demo', ctxTokens: i === 0 ? 289000 : 121000,
+  const nAgents = Math.max(1, Math.min(8, Number(demoParam('agents')) || 2));
+  const waitIdx = new Set((demoParam('waiting') ?? '1').split(',').filter((x) => x.trim() !== '').map(Number));
+  return ids.slice(0, nAgents).map((id, i): AgentInfo => ({
+    paneId: id, agent: 'claude', pid: 1000 + i, status: waitIdx.has(i) ? 'waiting' : 'busy',
+    title: i === 0 ? 'Maps -3-4-5-6' : i === 1 ? 'SSH terminal manager' : `Demo agent ${i + 1}`, cwd: i === 0 ? 'C:/Users/demo/code/maps' : 'C:/Users/demo', ctxTokens: i === 0 ? 289000 : 121000,
     current: i === 0 ? 'Bash: cargo test --release' : undefined, lastRequestAt: now - (i === 0 ? 120 : 3300), cacheTtl: 3600,
     configDir: i === 0 ? 'C:/Users/demo/.claude' : 'C:/Users/demo/.claude-b',
     model: i === 0 ? 'claude-opus-5-5' : 'claude-sonnet-5-5', startedAt: now - (i === 0 ? 2 * 3600 + 840 : 3 * 3600 + 20 * 60),
     lastPrompt: i === 0 ? 'Make the parser handle multi-line strings and add tests with the real transcripts from last week'
       : 'Add an SSH host list with a ping badge next to each name',
-    waitingFor: i === 0 ? undefined : 'Bash: ssh-keygen -t ed25519 -f ~/.ssh/orchestra',
+    waitingFor: !waitIdx.has(i) ? undefined : i === 0 ? 'Edit: src/parser.ts' : i === 1 ? 'Bash: ssh-keygen -t ed25519 -f ~/.ssh/orchestra' : 'Bash: npm publish',
     tokens: i === 0 ? { input: 2400, output: 1521000, cacheRead: 230356000, cacheCreate: 4706000, thinking: 312000, requests: 927 }
       : { input: 900, output: 210000, cacheRead: 18000000, cacheCreate: 900000, thinking: 100000, requests: 140 },
     subTokens: i === 0 ? { input: 0, output: 16300000, cacheRead: 2360000000, cacheCreate: 31000000, thinking: 0, requests: 16466 }
@@ -542,4 +607,41 @@ export async function gitInfo(cwd: string): Promise<GitInfoT | null> {
 export async function gitAvailable(): Promise<boolean> {
   if (!inTauri) return true;
   try { return await invoke<boolean>('git_available'); } catch { return false; }
+}
+
+// ---------- pegar y soltar imágenes en los terminales (ver clipimg.rs e imagepaste.ts) ----------
+export interface ImgInfo { width: number; height: number }
+export interface SavedImage extends ImgInfo { path: string; bytes: number }
+
+/** Tamaño de la imagen del portapapeles, o null si no hay. */
+export async function clipboardImageInfo(): Promise<ImgInfo | null> {
+  if (!inTauri) return null;
+  return invoke<ImgInfo | null>('clipboard_image_info');
+}
+/** Guarda la imagen del portapapeles en PNG en la caché; null si no hay imagen. Error «too-large:<bytes>» si pasa del tope. */
+export async function clipboardImageToFile(): Promise<SavedImage | null> {
+  if (!inTauri) return null;
+  return invoke<SavedImage | null>('clipboard_image_to_file');
+}
+/**
+ * Copia texto al portapapeles: por Rust (arboard, clipimg.rs) y, si eso falla, por `navigator.clipboard`.
+ * Lanza el error de Rust si fallan los dos: quien llama tiene que avisar, nunca tragárselo.
+ */
+export async function copyText(text: string): Promise<void> {
+  if (!inTauri) return navigator.clipboard.writeText(text);
+  try {
+    await invoke('clipboard_write_text', { text });
+  } catch (e) {
+    try { await navigator.clipboard.writeText(text); } catch { throw e; }
+  }
+}
+/** Sube un archivo de imagen local a ~/.cache/orchestra-paste/ del host y devuelve la ruta remota. */
+export async function sshUploadImage(dest: import('./imagepaste.ts').UploadDest, path: string): Promise<string> {
+  if (!inTauri) throw new Error('not available in the browser');
+  return invoke<string>('ssh_upload_image', { dest, path });
+}
+/** Archivos soltados en un panel desde el Explorador (rutas reales que da WebView2; ver terminals.ts). */
+export async function onFileDrop(cb: (pane: string, paths: string[]) => void): Promise<UnlistenFn> {
+  if (!inTauri) return () => {};
+  return listen<{ pane: string; paths: string[] }>('orchestra-file-drop', (e) => cb(e.payload.pane, e.payload.paths));
 }

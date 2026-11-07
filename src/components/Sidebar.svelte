@@ -6,6 +6,7 @@
   import Icon from './Icon.svelte';
   import Logo from './Logo.svelte';
   import AgentTree from './AgentTree.svelte';
+  import NeedsAttention from './NeedsAttention.svelte';
   import UsageBars from './UsageBars.svelte';
   import { POLICIES } from '../lib/policy.ts';
   import { PROVIDERS, accountTitle, providerOf } from '../lib/model.ts';
@@ -15,6 +16,8 @@
   import { statusLabel } from '../lib/providers.ts';
   import { t, tk } from '../lib/i18n.ts';
   import { ctxmenu } from '../lib/ctxmenu.svelte.ts';
+  import { files } from '../lib/files.svelte.ts';
+  import { forwards } from '../lib/forwards.svelte.ts';
   import { isMenuKey } from '../lib/ctxmenu.ts';
   import { accountsViewMenu, hostFolderMenu, hostMenu, hostsViewMenu, sidebarMenu } from '../lib/ctxitems.ts';
   import { UNGROUPED, buildHostView, canStepHost, folderOf, folderOrder } from '../lib/hostview.ts';
@@ -177,6 +180,8 @@
       folder: folderOf(h), folders: folderOrder(app.hosts, app.settings.hostFolders),
       canUp: reorderable && canStep(h, -1), canDown: reorderable && canStep(h, 1),
       connect: () => app.open({ kind: 'host', id: h.id }),
+      files: () => void files.open(h.id),
+      forward: () => forwards.openDialog(h.id),
       edit: () => editHost(h),
       up: () => stepHost(h, -1), down: () => stepHost(h, 1),
       moveTo: (f) => app.moveHostTo(h.id, f, null),
@@ -276,6 +281,8 @@
   </div>
 
   <div class="scroll">
+    <!-- NECESITAN ATENCIÓN (solo si algún agente espera) -->
+    <NeedsAttention />
     <!-- AGENTES ACTIVOS -->
     {#if app.agents.length}
       <div class="sec">
@@ -396,7 +403,7 @@
               onclick={() => app.open({ kind: 'host', id: h.id })} title={t('sidebar.ssh.hostTitle')}>
               <span class="dot sq" style:background={h.color || 'var(--info)'}></span>
               <span class="txt">
-                <span class="name">{h.name || h.host}</span>
+                <span class="name">{h.name || h.host}{#if app.hostDot(h.id)}<span class="hdot {app.hostDot(h.id)}" title={app.hostDot(h.id) === 'red' ? t('attention.ssh.dotGaveUp') : t('attention.ssh.dotDown')}><Icon name="unplug" size={10} /></span>{/if}</span>
                 <span class="sub">{h.user ? h.user + '@' : ''}{h.host}{h.port ? ':' + h.port : ''}{h.tmux ? ' · tmux' : ''}</span> <!-- i18n-ignore -->
               </span>
             </button>
@@ -418,7 +425,7 @@
         <button class="item" draggable="true" ondragstart={(e) => dragStart(e, { kind: 'sshconfig', alias: h.alias })}
           onclick={() => app.open({ kind: 'sshconfig', alias: h.alias })} title={t('sidebar.ssh.fromConfigTitle')}>
           <span class="dot sq" style:background="var(--faint)"></span>
-          <span class="txt"><span class="name">{h.alias}</span><span class="sub">{h.user ? h.user + '@' : ''}{h.hostname ?? ''} · ssh config</span></span>
+          <span class="txt"><span class="name">{h.alias}{#if app.hostDot('cfg:' + h.alias)}<span class="hdot {app.hostDot('cfg:' + h.alias)}" title={app.hostDot('cfg:' + h.alias) === 'red' ? t('attention.ssh.dotGaveUp') : t('attention.ssh.dotDown')}><Icon name="unplug" size={10} /></span>{/if}</span><span class="sub">{h.user ? h.user + '@' : ''}{h.hostname ?? ''} · ssh config</span></span>
         </button>
       {/each}
       {#if !anyHost && !cfgHosts.length}
@@ -507,6 +514,10 @@
   .item.renaming:hover { background: none; }
   .rn { flex: 1; min-width: 0; font-size: 12.5px; padding: 3px 6px; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Conexión SSH caída en algún panel de este host (ámbar = reconectando, rojo = se rindió). */
+  .hdot { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 5px; border-radius: 50%; vertical-align: -3px; }
+  .hdot.amber { color: var(--warn); background: color-mix(in srgb, var(--warn) 18%, transparent); }
+  .hdot.red { color: var(--bad); background: color-mix(in srgb, var(--bad) 18%, transparent); }
   .sub { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { color: var(--muted); font-size: 12px; padding: 6px 14px; }
   .sshbtns { display: inline-flex; gap: 2px; }

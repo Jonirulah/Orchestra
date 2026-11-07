@@ -18,6 +18,8 @@ export default {
   'settings.terminal.scrollbackHint': 'Costs RAM in every terminal: about 14 MB per 10,000 lines at 120 columns.',
   'settings.terminal.copyOnSelectLabel': 'Copy on select',
   'settings.terminal.copyOnSelectHint': 'Selecting text copies it to the clipboard.',
+  'settings.terminal.pasteImagesLabel': 'Paste images from the clipboard',
+  'settings.terminal.pasteImagesHint': 'Ctrl+V with an image: Claude Code gets it as an attachment ([Image #1]); Codex, opencode and shells get the path of a saved PNG; SSH panes upload it to ~/.cache/orchestra-paste. You can also drop image files on a pane.',
   'settings.terminal.rightClickLabel': 'Right click',
   'settings.terminal.rightClickHint': 'Copy/paste copies the selection if there is one, otherwise pastes.',
   'settings.terminal.rightSmart': 'Copy/paste',

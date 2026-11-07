@@ -13,6 +13,7 @@ import { DEFAULTS, fontStack } from './settings.ts';
 import { themeOf } from './themes.ts';
 import type { TermTheme } from './themes.ts';
 import { parseOsc7, parseOsc9, withCwdTracking } from './gitinfo.ts';
+import { copiedCount, ctrlCAction, parseOsc52, rightClickAction, shouldHintShift } from './termcopy.ts';
 
 export interface TermHooks {
   /** La shell avisa de su carpeta (OSC 9;9 o OSC 7); ya validada. */
@@ -26,6 +27,40 @@ export interface TermHooks {
   onOutput(id: string, seen: boolean): void;
   /** Devuelve true si la tecla es un atajo de la app (no se envía al terminal). */
   onShortcut(ev: KeyboardEvent, id: string): boolean;
+  /** Pegado SIN texto (Ctrl+V o clic derecho): devuelve true si lo gestiona el pegado de imágenes (ver imagepaste.ts). */
+  onImagePaste?(id: string, clip: { hasText: boolean; hasImage?: boolean }): boolean;
+  /** Se soltaron archivos pero no hay puente de WebView2 (navegador de pruebas). */
+  onDropUnavailable?(): void;
+  /** Resultado de copiar al portapapeles (Ctrl+C, clic derecho, copiar al seleccionar u OSC 52), para el aviso. */
+  onCopy?(id: string, r: CopyResult): void;
+  /** La app del panel tiene el ratón y se arrastró sin Mayús (no hay selección): pista «mantén Mayús». */
+  onShiftHint?(id: string): void;
+}
+
+export type CopyVia = 'key' | 'menu' | 'select' | 'osc52';
+export type CopyResult = { ok: true; chars: number; via: CopyVia } | { ok: false; error: string; via: CopyVia };
+
+/** Copia y avisa SIEMPRE del resultado (antes `navigator.clipboard.writeText` sin .catch: los fallos se perdían). */
+function copyOut(id: string, text: string, via: CopyVia): void {
+  if (!text) return;
+  be.copyText(text).then(
+    () => hooks.onCopy?.(id, { ok: true, chars: copiedCount(text), via }),
+    (e) => hooks.onCopy?.(id, { ok: false, error: e instanceof Error ? e.message : String(e), via }),
+  );
+}
+
+/** Pista de Mayús: una vez por sesión de la app. */
+let shiftHinted = false;
+
+/** WebView2: `postMessageWithAdditionalObjects` entrega a Rust los archivos soltados con su ruta real (clipimg.rs). */
+interface WebView2Bridge { postMessageWithAdditionalObjects?(msg: unknown, objs: FileList): void }
+const webview2 = (): WebView2Bridge | undefined =>
+  (globalThis as { chrome?: { webview?: WebView2Bridge } }).chrome?.webview;
+
+/** ¿Arrastran archivos de fuera (Explorador)? Los arrastres internos (paneles, hosts, cuentas) llevan tipos propios. */
+function externalFiles(ev: DragEvent): boolean {
+  const t = ev.dataTransfer?.types ?? [];
+  return t.includes('Files') && !t.some((x) => x.startsWith('application/x-orchestra-'));
 }
 
 /** Opciones ya resueltas (lista CSS de fuentes y tema completo): las construye el store a partir de los ajustes. */
@@ -152,15 +187,44 @@ function create(id: string): Entry {
     if (!opts.copyOnSelect) return;
     clearTimeout(selTimer);
     selTimer = window.setTimeout(() => {
-      if (opts.copyOnSelect && term.hasSelection()) void navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+      if (opts.copyOnSelect && term.hasSelection()) copyOut(id, term.getSelection(), 'select');
     }, 180);
   });
+  // OSC 52: las apps remotas (Claude Code por SSH, tmux, nvim) copian así. Solo escritura; la lectura nunca (termcopy.ts).
+  term.parser.registerOscHandler(52, (data) => {
+    const text = parseOsc52(data);
+    if (text) copyOut(id, text, 'osc52');
+    return true;
+  });
+  // Pista de Mayús: si la app tiene el ratón (opencode, Codex, Claude Code…), arrastrar no selecciona en xterm.
+  // Se mira en captura: con el ratón activado xterm se queda el evento.
+  // Clic derecho: con el ratón activado xterm borra la selección al pulsar, antes de `contextmenu` (medido con
+  // opencode: Mayús+arrastrar y clic derecho no copiaba). Se guarda aquí la selección para el menú.
+  let rightSel = '';
+  el.addEventListener('mousedown', (down) => {
+    if (down.button === 2) { rightSel = term.hasSelection() ? term.getSelection() : ''; return; }
+    if (down.button !== 0 || shiftHinted) return;
+    const tracking = term.modes.mouseTrackingMode;
+    if (tracking === 'none') return;
+    window.addEventListener('mouseup', (up) => {
+      const movedPx = Math.hypot(up.clientX - down.clientX, up.clientY - down.clientY);
+      if (shouldHintShift({ tracking, shift: down.shiftKey, movedPx, hasSelection: term.hasSelection(), alreadyHinted: shiftHinted })) {
+        shiftHinted = true;
+        hooks.onShiftHint?.(id);
+      }
+    }, { capture: true, once: true });
+  }, true);
   term.attachCustomKeyEventHandler((ev) => {
     if (ev.type !== 'keydown') return true;
-    // Copiar: Ctrl+C con selección, o Ctrl+Shift+C.
-    if (ev.ctrlKey && !ev.altKey && ev.code === 'KeyC' && (ev.shiftKey || term.hasSelection())) {
-      void navigator.clipboard.writeText(term.getSelection());
+    // Copiar: Ctrl+C con selección o Ctrl+Mayús+C. Ctrl+C sin selección va al terminal (interrumpir).
+    const c = ctrlCAction(ev, term.hasSelection());
+    if (c === 'copy') {
+      copyOut(id, term.getSelection(), 'key');
       term.clearSelection();
+      return false;
+    }
+    if (c === 'nothing') {
+      if (term.modes.mouseTrackingMode !== 'none' && !shiftHinted) { shiftHinted = true; hooks.onShiftHint?.(id); }
       return false;
     }
     // Pegar: dejamos que el navegador dispare el evento `paste` (xterm hace bracketed paste).
@@ -170,13 +234,49 @@ function create(id: string): Entry {
   });
   el.addEventListener('contextmenu', (ev) => {
     ev.preventDefault();
-    if (opts.rightClick === 'none') return;
-    if (opts.rightClick === 'smart' && term.hasSelection()) {
-      void navigator.clipboard.writeText(term.getSelection());
+    const sel = term.hasSelection() ? term.getSelection() : rightSel;
+    rightSel = '';
+    const action = rightClickAction(opts.rightClick, sel.length > 0);
+    if (action === 'none') return;
+    if (action === 'copy') {
+      copyOut(id, sel, 'menu');
       term.clearSelection();
     } else {
-      void navigator.clipboard.readText().then((t) => t && term.paste(t)).catch(() => {});
+      void navigator.clipboard.readText().then((t) => {
+        if (t) term.paste(t);
+        else hooks.onImagePaste?.(id, { hasText: false });
+      }).catch(() => {});
     }
+  });
+  // Ctrl+V: el navegador dispara `paste` en el textarea de xterm. Se escucha ANTES (fase de captura en el contenedor):
+  // si no hay texto pero sí imagen, lo gestiona el pegado de imágenes y xterm no ve nada.
+  el.addEventListener('paste', (ev) => {
+    const cd = ev.clipboardData;
+    if (!cd || cd.getData('text/plain')) return;
+    const hasImage = Array.from(cd.items).some((i) => i.kind === 'file' && i.type.startsWith('image/'));
+    if (hooks.onImagePaste?.(id, { hasText: false, hasImage })) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
+  // Archivos soltados desde el Explorador: se pasan a Rust por WebView2 (solo ahí hay rutas reales) y vuelven como
+  // evento `orchestra-file-drop`. El arrastre interno (tipos application/x-orchestra-*) no se toca.
+  const dropMark = (on: boolean) => { el.style.outline = on ? '2px dashed var(--accent, #6cb2ff)' : ''; el.style.outlineOffset = on ? '-3px' : ''; };
+  el.addEventListener('dragover', (ev) => {
+    if (!externalFiles(ev)) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+    dropMark(true);
+  });
+  el.addEventListener('dragleave', () => dropMark(false));
+  el.addEventListener('drop', (ev) => {
+    dropMark(false);
+    if (!externalFiles(ev) || !ev.dataTransfer?.files.length) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const wv = webview2();
+    if (wv?.postMessageWithAdditionalObjects) wv.postMessageWithAdditionalObjects(`orchestra-drop:${id}`, ev.dataTransfer.files);
+    else hooks.onDropUnavailable?.();
   });
   entries.set(id, entry);
   return entry;
@@ -221,20 +321,25 @@ export async function launch(pane: Pane): Promise<void> {
   }
 }
 
+/** Oyente de la salida en bruto (lo pone el reenvío de puertos para buscar «Local: http://localhost:5173/»). */
+let outputTap: ((id: string, b: Uint8Array) => void) | null = null;
+export function setOutputTap(fn: ((id: string, b: Uint8Array) => void) | null): void { outputTap = fn; }
+
 async function attach(entry: Entry): Promise<void> {
   let seen = false;
   const code = await be.ptyAttach(entry.id, (b) => {
     if (!seen) { seen = true; hooks.onOutput(entry.id, true); }
     entry.term.write(b);
+    outputTap?.(entry.id, b);
   });
   if (code !== null && code !== undefined) hooks.onState(entry.id, 'exited', code);
 }
 
-/** Relanza el mismo panel tras terminar su proceso. */
-export async function restart(pane: Pane): Promise<void> {
+/** Relanza el mismo panel tras terminar su proceso. `banner` = rótulo local en lugar de «── restarted ──» (reconexión automática). */
+export async function restart(pane: Pane, banner?: string): Promise<void> {
   const e = entries.get(pane.id);
   if (!e) { ensure(pane); return launch(pane); }
-  e.term.write('\r\n\x1b[2m── restarted ──\x1b[0m\r\n');
+  e.term.write(`\r\n\x1b[2m${banner ?? '── restarted ──'}\x1b[0m\r\n`);
   hooks.onOutput(pane.id, false);
   await be.ptySpawn({
     id: pane.id, program: pane.spec.program, args: spawnArgs(pane), cwd: pane.spec.cwd,
@@ -336,3 +441,19 @@ export function findNext(id: string, q: string, back = false): boolean {
 export function clearSearch(id: string): void { entries.get(id)?.search.clearDecorations(); }
 export function paste(id: string, text: string): void { entries.get(id)?.term.paste(text); }
 export function selection(id: string): string { return entries.get(id)?.term.getSelection() ?? ''; }
+
+/**
+ * Escribe una línea propia de Orchestra (verde tenue) en el terminal, solo en pantalla: NUNCA llega al PTY.
+ * Si el cursor está a media línea (el prompt remoto ya pintado), la línea va ENCIMA y el prompt se vuelve a pintar
+ * debajo (sin sus colores) con el cursor donde estaba: así no queda un prompt partido.
+ */
+export function noteAbove(id: string, text: string): void {
+  const e = entries.get(id);
+  if (!e) return;
+  const note = `\x1b[32;2m${text}\x1b[0m`;
+  const buf = e.term.buffer.active;
+  const x = buf.cursorX;
+  if (x === 0) { e.term.write(`${note}\r\n`); return; }
+  const line = buf.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? '';
+  e.term.write(`\r\x1b[2K${note}\r\n${line}\x1b[${x + 1}G`);
+}

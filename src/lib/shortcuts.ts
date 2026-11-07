@@ -18,6 +18,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: 'Ctrl+,', whatKey: 'shortcuts.openSettings' },
       { keys: 'Ctrl+Shift+P', whatKey: 'shortcuts.palette' },
       { keys: 'Ctrl+Shift+B', whatKey: 'shortcuts.toggleSidebar' },
+      { keys: 'Ctrl+Shift+A', whatKey: 'shortcuts.nextWaiting' },
       { keys: 'Esc', whatKey: 'shortcuts.closeDialog' },
     ],
   },
@@ -41,6 +42,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { keys: 'Ctrl+C', whatKey: 'shortcuts.copySmart' },
       { keys: 'Ctrl+Shift+C', whatKey: 'shortcuts.copy' },
       { keys: 'Ctrl+V', whatKey: 'shortcuts.paste' },
+      { keys: 'Ctrl+V', whatKey: 'shortcuts.pasteImage' },
     ],
   },
 ];

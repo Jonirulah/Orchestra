@@ -7,6 +7,7 @@
   import Toggle from './Toggle.svelte';
   import Slider from './Slider.svelte';
   import Seg from './Seg.svelte';
+  import { sftpPick } from '../lib/sftpbackend.ts';
   import { LIMITS } from '../lib/settings.ts';
   import type { Settings } from '../lib/settings.ts';
   import type { ReconnectCodes } from '../lib/reconnect.ts';
@@ -83,7 +84,7 @@
 
   async function copyPub(k: be.SshKeyInfo) {
     try {
-      await navigator.clipboard.writeText(k.publicKey);
+      await be.copyText(k.publicKey);
       msg = { ok: true, text: t('settings.keys.copiedMsg', { name: k.name }) };
     } catch (e) {
       msg = { ok: false, text: t('settings.keys.copyFailedMsg', { error: String(e) }) };
@@ -122,6 +123,31 @@
     {/each}
   </div>
 </div>
+
+<h4 class="grp">{t('files.set.title')}</h4>
+<div class="s-row">
+  <div class="lbl"><b>{t('files.set.dirLabel')}</b><small>{s.sftpDownloadDir || t('files.set.dirDefault')}</small></div>
+  <div class="ctl">
+    <button type="button" class="btn" onclick={async () => { const p = await sftpPick(true); if (p[0]) app.setting('sftpDownloadDir', p[0]); }}>{t('files.set.choose')}</button>
+    {#if s.sftpDownloadDir}<button type="button" class="btn" onclick={() => app.setting('sftpDownloadDir', '')}>{t('files.set.reset')}</button>{/if}
+  </div>
+</div>
+<div class="s-row">
+  <div class="lbl"><b>{t('files.set.askLabel')}</b><small>{t('files.set.askHint')}</small></div>
+  <div class="ctl"><Toggle value={s.sftpAskDownload} label={t('files.set.askLabel')} onchange={(v) => app.setting('sftpAskDownload', v)} /></div>
+</div>
+
+<h4 class="grp">{t('ports.set.title')}</h4>
+<div class="s-row">
+  <div class="lbl"><b>{t('ports.set.detectLabel')}</b><small>{t('ports.set.detectHint')}</small></div>
+  <div class="ctl"><Toggle value={s.portsDetect} label={t('ports.set.detectLabel')} onchange={(v) => app.setting('portsDetect', v)} /></div>
+</div>
+{#if s.portsDetect}
+  <div class="s-row">
+    <div class="lbl"><b>{t('ports.set.autoOpenLabel')}</b><small>{t('ports.set.autoOpenHint')}</small></div>
+    <div class="ctl"><Toggle value={s.portsAutoOpen} label={t('ports.set.autoOpenLabel')} onchange={(v) => app.setting('portsAutoOpen', v)} /></div>
+  </div>
+{/if}
 
 <h4 class="grp">{t('settings.keys.reconnectTitle')}</h4>
 <div class="s-row">

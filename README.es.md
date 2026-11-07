@@ -112,7 +112,7 @@ Descarga los archivos desde la página de [Releases](../../releases). Hay dos op
 | Archivo | Qué es |
 |---|---|
 | `Orchestra_0.3.0_x64-setup.exe` | Instalador NSIS, **por usuario** (sin permisos de administrador), en inglés / español. |
-| `Orchestra.exe` | Ejecutable portátil (unos 10 MB). Ponlo donde quieras y ejecútalo. |
+| `Orchestra_0.3.0_x64-portable.exe` | Ejecutable portátil (unos 10 MB). Ponlo donde quieras y ejecútalo. |
 
 Notas:
 
@@ -120,6 +120,9 @@ Notas:
   falta, instálalo desde Microsoft («Evergreen Runtime»).
 - **Los binarios no están firmados**, así que SmartScreen de Windows puede avisar («Windows protegió su PC»). Si has descargado el
   archivo desde la página de Releases de este repositorio, elige *Más información → Ejecutar de todas formas*.
+- **Actualizaciones:** la versión instalada mira la página de Releases al arrancar y cada 6 horas (Ajustes → General, se puede
+  apagar) y avisa cuando hay una versión nueva. *Actualizar* descarga el instalador, comprueba su firma, lo instala y reinicia
+  Orchestra; tus paneles y sesiones de Claude se restauran. El exe portátil solo ofrece abrir la página de descarga.
 - Para SSH necesitas el cliente OpenSSH (`ssh.exe`, una característica opcional de Windows que suele venir ya instalada). Para la
   etiqueta de git necesitas `git` en el `PATH`. Para los agentes necesitas la CLI del propio agente (`claude`, `codex`, `opencode`)
   en el `PATH`.

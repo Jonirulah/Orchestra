@@ -227,6 +227,10 @@ export function hostFolderMenu(c: HostFolderMenuCtx): MenuItem[] {
 }
 
 export interface HostMenuCtx {
+  /** «Explorar archivos» (SFTP). Sin él, no sale. */
+  files?: () => void;
+  /** «Reenviar un puerto…» (túnel SSH). Sin él, no sale. */
+  forward?: () => void;
   /** Carpeta actual ('' = sin carpeta). */
   folder: string;
   /** Carpetas con nombre, en el orden en que se ven. */
@@ -247,6 +251,8 @@ export interface HostMenuCtx {
 export function hostMenu(c: HostMenuCtx): MenuItem[] {
   return tidy([
     { id: 'connect', label: t('ctx.host.connect'), run: c.connect },
+    ...(c.files ? [{ id: 'files', label: t('files.explore'), run: c.files }] : []),
+    ...(c.forward ? [{ id: 'forward', label: t('ports.ctx.forward'), run: c.forward }] : []),
     { id: 'edit', label: t('ctx.host.edit'), run: c.edit },
     sep('s1'),
     { id: 'up', label: t('ctx.host.moveUp'), hint: 'Alt+↑', disabled: !c.canUp, run: c.up },

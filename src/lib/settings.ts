@@ -42,6 +42,8 @@ export interface Settings {
   statusBarAdapt: boolean;
   /** Segundos entre líneas de las métricas remotas del servidor (2..10). */
   remoteMetricsInterval: number;
+  /** Buscar versiones nuevas en GitHub al arrancar y cada 6 h (ver updatecheck.ts). */
+  autoUpdate: boolean;
   // --- Terminal ---
   /** Nombre de una fuente (o una lista CSS si es personalizada). */
   fontFamily: string;
@@ -51,6 +53,8 @@ export interface Settings {
   cursorBlink: boolean;
   scrollback: number;
   copyOnSelect: boolean;
+  /** Ctrl+V con una imagen en el portapapeles: Claude la recibe con su atajo; el resto, la ruta de un PNG (ver imagepaste.ts). */
+  pasteImages: boolean;
   rightClick: RightClick;
   bell: BellMode;
   theme: string;
@@ -99,6 +103,16 @@ export interface Settings {
   // --- SSH keys ---
   /** Huella de servidores con contraseña/passphrase guardada: 'confirm' = Orchestra pregunta con la huella; 'accept-new' = confía la primera vez. */
   sshHostKeyPolicy: HostKeyPolicy;
+  // --- Explorador de archivos (SFTP) ---
+  /** Carpeta local de las descargas por SFTP. Vacío = la carpeta Descargas de Windows. */
+  sftpDownloadDir: string;
+  /** Preguntar la carpeta en cada descarga en vez de usar la de arriba. */
+  sftpAskDownload: boolean;
+  // --- SSH: reenvío de puertos (ver portdetect.ts) ---
+  /** Buscar en la salida de los paneles SSH servidores que arrancan en un puerto y ofrecer abrirlos con un túnel. */
+  portsDetect: boolean;
+  /** Al detectar uno, crear el túnel y abrir el navegador sin preguntar. */
+  portsAutoOpen: boolean;
   // --- SSH: reconexión automática (ver reconnect.ts) ---
   /** Reconectar solo un panel SSH cuya sesión establecida se cae. */
   sshAutoReconnect: boolean;
@@ -171,6 +185,7 @@ export const DEFAULTS: Settings = {
   statusBarInterval: DEFAULT_INTERVAL,
   statusBarAdapt: false,
   remoteMetricsInterval: DEFAULT_RM_INTERVAL,
+  autoUpdate: true,
   fontFamily: 'Cascadia Code',
   fontSize: 13,
   lineHeight: 1.12,
@@ -178,6 +193,7 @@ export const DEFAULTS: Settings = {
   cursorBlink: true,
   scrollback: 5000,
   copyOnSelect: false,
+  pasteImages: true,
   rightClick: 'smart',
   bell: 'flash',
   theme: 'orchestra',
@@ -204,6 +220,10 @@ export const DEFAULTS: Settings = {
   mcpEnabled: true,
   mcpExposeLocal: false,
   sshHostKeyPolicy: 'confirm',
+  sftpDownloadDir: '',
+  sftpAskDownload: false,
+  portsDetect: true,
+  portsAutoOpen: false,
   sshAutoReconnect: true,
   sshReconnectMaxAttempts: 8,
   sshReconnectFirstDelaySec: 2,
@@ -276,12 +296,12 @@ export const LIMITS = {
 
 /** Claves que reinicia «Reset section» en cada sección con ajustes. */
 export const SECTION_KEYS = {
-  general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval'],
-  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
+  general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
+  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
   agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
-    'sshHostKeyPolicy',
+    'sshHostKeyPolicy', 'sftpDownloadDir', 'sftpAskDownload', 'portsDetect', 'portsAutoOpen',
     'sshAutoReconnect', 'sshReconnectMaxAttempts', 'sshReconnectFirstDelaySec', 'sshReconnectFactor', 'sshReconnectMaxDelaySec',
     'sshReconnectMinUpSec', 'sshReconnectCodes', 'sshReconnectFlash',
     'latencyBadge', 'latencyIntervalSec', 'latencyTimeoutSec', 'latencyWarnMs', 'latencyBadMs', 'latencySamples', 'latencyFailsBad', 'latencyShowUnit',
@@ -334,6 +354,7 @@ export function clampSettings(raw: unknown): Settings {
     statusBarInterval: cleanInterval(r.statusBarInterval),
     statusBarAdapt: bool(r.statusBarAdapt, D.statusBarAdapt),
     remoteMetricsInterval: cleanRmInterval(r.remoteMetricsInterval),
+    autoUpdate: bool(r.autoUpdate, D.autoUpdate),
     fontFamily: cleanFont(r.fontFamily, D.fontFamily),
     fontSize: num(r.fontSize, LIMITS.fontSize, D.fontSize),
     lineHeight: num(r.lineHeight, LIMITS.lineHeight, D.lineHeight, 2),
@@ -341,6 +362,7 @@ export function clampSettings(raw: unknown): Settings {
     cursorBlink: bool(r.cursorBlink, D.cursorBlink),
     scrollback: (SCROLLBACK_CHOICES as readonly unknown[]).includes(r.scrollback) ? (r.scrollback as number) : D.scrollback,
     copyOnSelect: bool(r.copyOnSelect, D.copyOnSelect),
+    pasteImages: bool(r.pasteImages, D.pasteImages),
     rightClick: oneOf(r.rightClick, RIGHT_CLICKS, D.rightClick),
     bell: oneOf(r.bell, BELL_MODES, D.bell),
     // Un tema propio puede venir de otro equipo: se acepta el id y, si no existe aquí, themes.resolveTheme cae a Orchestra Dark.
@@ -368,6 +390,10 @@ export function clampSettings(raw: unknown): Settings {
     mcpEnabled: bool(r.mcpEnabled, D.mcpEnabled),
     mcpExposeLocal: bool(r.mcpExposeLocal, D.mcpExposeLocal),
     sshHostKeyPolicy: oneOf(r.sshHostKeyPolicy, HOST_KEY_POLICIES, D.sshHostKeyPolicy),
+    sftpDownloadDir: typeof r.sftpDownloadDir === 'string' ? r.sftpDownloadDir.slice(0, 500) : D.sftpDownloadDir,
+    sftpAskDownload: bool(r.sftpAskDownload, D.sftpAskDownload),
+    portsDetect: bool(r.portsDetect, D.portsDetect),
+    portsAutoOpen: bool(r.portsAutoOpen, D.portsAutoOpen),
     sshAutoReconnect: bool(r.sshAutoReconnect, D.sshAutoReconnect),
     sshReconnectMaxAttempts: num(r.sshReconnectMaxAttempts, LIMITS.sshReconnectMaxAttempts, D.sshReconnectMaxAttempts),
     sshReconnectFirstDelaySec: num(r.sshReconnectFirstDelaySec, LIMITS.sshReconnectFirstDelaySec, D.sshReconnectFirstDelaySec),

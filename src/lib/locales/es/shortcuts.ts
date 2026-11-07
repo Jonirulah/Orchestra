@@ -7,6 +7,7 @@ export default {
   'shortcuts.openSettings': 'Abrir los ajustes',
   'shortcuts.palette': 'Paleta de comandos',
   'shortcuts.toggleSidebar': 'Mostrar / ocultar la barra lateral',
+  'shortcuts.nextWaiting': 'Ir al siguiente agente que te espera',
   'shortcuts.closeDialog': 'Cerrar el diálogo abierto',
   'shortcuts.newTerminal': 'Nuevo terminal (primer shell)',
   'shortcuts.closePane': 'Cerrar el panel con el foco',
@@ -20,4 +21,5 @@ export default {
   'shortcuts.copySmart': 'Copiar si hay una selección (si no, se envía al programa)',
   'shortcuts.copy': 'Copiar la selección',
   'shortcuts.paste': 'Pegar',
+  'shortcuts.pasteImage': 'Pegar una imagen: Claude la recibe adjunta ([Image #1]); el resto de paneles, la ruta de un PNG (Ajustes → Terminal)',
 } as const;

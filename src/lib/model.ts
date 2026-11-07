@@ -83,9 +83,14 @@ export interface Host {
   tmux?: boolean;
   /** Abre una segunda conexión SSH pequeña (no interactiva) para enseñar CPU/RAM/disco/red del servidor en la barra de estado. Apagado por defecto. */
   remoteMetrics?: boolean;
+  /** Puertos del remoto que se reenvían solos al conectar (túnel `ssh -L` a 127.0.0.1; ver portdetect.ts / portfwd.rs). */
+  forwards?: SavedForward[];
   notes?: string;
   agentAccess: AgentAccess;
 }
+
+/** Reenvío guardado en un host: puerto remoto y, si se quiere otro, el local preferido. */
+export interface SavedForward { remote: number; local?: number }
 
 export const MIN_TRACK_PX = 140;
 
@@ -404,6 +409,29 @@ export function emptyHost(): Host {
   return { id: uid('h'), name: '', tags: [], host: '', authMethod: 'agent', agentAccess: 'none' };
 }
 
+/** Puerto válido escrito por el usuario (1–65535), o null. */
+export function parsePort(v: unknown): number | null {
+  const s = typeof v === 'number' ? String(v) : typeof v === 'string' ? v.trim() : '';
+  if (!/^\d{1,5}$/.test(s)) return null;
+  const n = Number(s);
+  return n >= 1 && n <= 65535 ? n : null;
+}
+
+/** Reenvíos guardados en un host (validados; sin repetir el remoto; como mucho 20). `undefined` si no queda ninguno. */
+export function cleanForwards(raw: unknown): SavedForward[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: SavedForward[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== 'object') continue;
+    const r = parsePort((x as { remote?: unknown }).remote);
+    if (r === null || out.some((f) => f.remote === r)) continue;
+    const l = parsePort((x as { local?: unknown }).local);
+    out.push(l !== null && l !== r ? { remote: r, local: l } : { remote: r });
+    if (out.length >= 20) break;
+  }
+  return out.length ? out : undefined;
+}
+
 /** Hosts guardados con versiones anteriores (sin authMethod ni banderas) se cargan con valores por defecto.
  *  Las banderas solo valen si el método las usa; nunca se conserva nada parecido a un secreto. */
 export function normalizeHost(raw: Partial<Host> & { id: string }): Host {
@@ -424,6 +452,8 @@ export function normalizeHost(raw: Partial<Host> & { id: string }): Host {
   if (h.hostKeyPolicy !== 'confirm' && h.hostKeyPolicy !== 'accept-new') delete h.hostKeyPolicy;
   // Solo `true` cuenta; cualquier otra cosa = apagado (campo ausente).
   if ((raw as { remoteMetrics?: unknown }).remoteMetrics === true) h.remoteMetrics = true; else delete h.remoteMetrics;
+  const fw = cleanForwards((raw as { forwards?: unknown }).forwards);
+  if (fw) h.forwards = fw; else delete h.forwards;
   return h;
 }
 

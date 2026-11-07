@@ -6,6 +6,7 @@ pending and which files were touched. They are history, not documentation: for h
 
 | File | Feature |
 |---|---|
+| `actualizaciones.md` | Automatic updates and release process (how it works, not history) |
 | `_estado_traduccion.md` | UI translation to English |
 | `_estado_settings.md` | Settings dialog |
 | `_estado_cuotas.md` | Usage bars and status line wrapper |

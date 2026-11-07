@@ -20,6 +20,14 @@ keyring = { version = "3", default-features = false, features = ["windows-native
 socket2 = "0.6"
 getrandom = "0.3"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+arboard = { version = "3.7.0", default-features = false, features = ["image-data"] }
+png = "0.18"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+# Notificación de Windows cuando un agente pasa a esperarte y la ventana no está delante.
+tauri-plugin-notification = "2"
+# Diálogo nativo de «Subir…» del explorador SFTP (se llama desde Rust: sin permisos en la página).
+tauri-plugin-dialog = "2"
 
 [profile.dev]
 debug = 0
@@ -30,3 +38,9 @@ opt-level = "s"
 lto = "thin"
 strip = true
 codegen-units = 4
+
+# Arrastrar archivos desde el Explorador: rutas de los ICoreWebView2File (clipimg.rs). Mismas versiones que wry.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows-core = "0.62"
+windows = { version = "0.62", features = ["Win32_System_Com"] }

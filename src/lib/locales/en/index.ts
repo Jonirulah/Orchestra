@@ -15,6 +15,7 @@ import model from './model.ts';
 import terminals from './terminals.ts';
 import tray from './tray.ts';
 import settingsTerminal from './settingsTerminal.ts';
+import imagepaste from './imagepaste.ts';
 import settingsAgents from './settingsAgents.ts';
 import settingsDialog from './settingsDialog.ts';
 import settingsAccounts from './settingsAccounts.ts';
@@ -31,6 +32,10 @@ import providers from './providers.ts';
 import ctx from './ctx.ts';
 import git from './git.ts';
 import statusbar from './statusbar.ts';
+import updater from './updater.ts';
+import attention from './attention.ts';
+import files from './files.ts';
+import ports from './ports.ts';
 
 export const en = {
   ...app,
@@ -49,6 +54,7 @@ export const en = {
   ...terminals,
   ...tray,
   ...settingsTerminal,
+  ...imagepaste,
   ...settingsAgents,
   ...settingsDialog,
   ...settingsAccounts,
@@ -65,4 +71,8 @@ export const en = {
   ...ctx,
   ...git,
   ...statusbar,
+  ...updater,
+  ...attention,
+  ...files,
+  ...ports,
 };

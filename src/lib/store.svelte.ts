@@ -1,5 +1,8 @@
 import * as be from './backend.ts';
 import * as T from './terminals.ts';
+import { decidePaste, pasteTarget } from './imagepaste.ts';
+import { runDrop, runImagePaste } from './imagepasterun.ts';
+import type { PasteIO } from './imagepasterun.ts';
 import { compactKey, decideCompact, pushLog } from './autocompact.ts';
 import type { CompactLogEntry } from './autocompact.ts';
 import {
@@ -30,6 +33,9 @@ import { sanitizeCustomThemes, sanitizeName, withUniqueIds } from './themeimport
 import { resolveLanguage, setLocale, t } from './i18n.ts';
 import { SshConn } from './sshconn.ts';
 import type { ConnState } from './sshconn.ts';
+import { dotOf, separatorText, sshLook, veiled, worstDot } from './sshdrop.ts';
+import type { SshLook } from './sshdrop.ts';
+import { alertPlan, nextWaiting, paneOrder, trackWaiting } from './attention.ts';
 import type { BackupState } from './backup.ts';
 import * as SW from './savedws.ts';
 import type { SavedWorkspace } from './savedws.ts';
@@ -95,9 +101,10 @@ class AppState {
   settings = $state<Settings>({ ...DEFAULTS });
   live = $state<Record<string, LiveInfo>>({});
   /** Insignia de latencia y reconexión de los paneles SSH (la lógica está en sshconn.ts). */
-  sshState = $state<ConnState>({ latency: {}, reconnecting: {}, flash: {} });
+  sshState = $state<ConnState>({ latency: {}, reconnecting: {}, flash: {}, down: {}, gaveUp: {} });
   readonly conn = new SshConn({
-    settings: () => this.settings,
+    // Demo del navegador con ?drop=N: la sesión «cuenta» como establecida antes de caerse y se rinde pronto (solo demo).
+    settings: () => (be.demoDrop() ? { ...this.settings, ...be.demoDropSettings(this.settings) } : this.settings),
     hosts: () => this.hosts,
     sshConfig: () => this.sshConfig,
     pane: (id) => {
@@ -106,7 +113,8 @@ class AppState {
     },
     visiblePanes: () => this.active.panes.filter((p) => !p.parked),
     live: (id) => this.live[id],
-    restart: (id) => this.restartNow(id),
+    restart: (id, attempt) => this.restartNow(id, attempt ? t('attention.ssh.retryBanner', { n: attempt }) : undefined),
+    reconnected: (id, at, downMs) => T.noteAbove(id, separatorText(at, downMs)),
     toast: (m) => this.toast(m),
     tailText: (id) => T.tailText(id),
     ping: (targets, timeoutSec) => be.netPing(targets, timeoutSec),
@@ -230,12 +238,19 @@ class AppState {
           if (seen) this.conn.outputSeen(id);
         },
         onShortcut: (ev) => this.handleShortcut(ev),
+        onImagePaste: (id, clip) => this.imagePaste(id, clip),
+        onDropUnavailable: () => this.toast(t('imagepaste.noDrop')),
+        onCopy: (_id, r) => this.toast(!r.ok ? t('terminals.copy.failed', { error: r.error })
+          : r.via === 'osc52' ? t('terminals.copy.doneApp', { n: r.chars })
+          : r.chars === 1 ? t('terminals.copy.doneOne') : t('terminals.copy.done', { n: r.chars })),
+        onShiftHint: () => this.toast(t('terminals.copy.shiftHint')),
         onCwd: (id, cwd) => { if (this.live[id]?.cwd !== cwd) this.setLive(id, { cwd }); },
         trackFolder: () => this.settings.gitTrackFolder,
       },
       this.termOptions(),
     );
     this.applyAppearance();
+    void be.onFileDrop((id, paths) => this.fileDrop(id, paths));
     be.setCloseToTray(this.settings.closeToTray);
     window.addEventListener('beforeunload', () => { this.conn.shutdown(); this.persistNow(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) void this.conn.tick(); });
@@ -429,6 +444,8 @@ class AppState {
   }
 
   private prevStatus = new Map<string, string>();
+  /** Desde cuándo espera cada agente (id de panel → ms), para el bloque «Necesitan atención». */
+  waitSince = $state<Record<string, number>>({});
 
   private polling = false;
 
@@ -446,16 +463,17 @@ class AppState {
 
   private async pollOnce(): Promise<void> {
     const ids = this.workspaces.flatMap((w) => w.panes.map((p) => p.id)).filter((id) => this.live[id]?.state === 'running');
-    if (!ids.length) { this.agents = []; this.subagentView = null; return; }
+    if (!ids.length) { this.agents = []; this.subagentView = null; this.waitSince = {}; return; }
     try {
       const found = await be.agentScan(ids, this.claudeAccounts.map((a) => a.dir));
       let needsYou = false, finished = false;
+      let firstWaiting: be.AgentInfo | undefined;
       for (const a of found) {
         const was = this.prevStatus.get(a.paneId);
         const pane = this.paneById(a.paneId);
         const name = pane?.title ?? t('store.agentFallback');
         if (was && was !== a.status) {
-          if (a.status === 'waiting') { needsYou = true; if (this.settings.notifyPermission) this.toast(t('store.toast.needsPermission', { name })); }
+          if (a.status === 'waiting') { needsYou = true; firstWaiting ??= a; if (this.settings.notifyPermission) this.toast(t('store.toast.needsPermission', { name })); }
           else if (was === 'busy' && a.status === 'idle') { finished = true; if (this.settings.notifyDone) this.toast(t('store.toast.finished', { name })); }
         }
         this.prevStatus.set(a.paneId, a.status);
@@ -463,7 +481,9 @@ class AppState {
       // Un solo sonido por escaneo (pedir permiso gana a terminar); el anti-spam de sounds.ts limita a uno cada 1,5 s.
       const snd = needsYou ? this.settings.soundAttention : finished ? this.settings.soundDone : 'none';
       if (snd !== 'none') playSound(snd, this.settings.soundVolume / 100);
+      if (firstWaiting) this.alertOutside(firstWaiting);
       this.agents = found;
+      this.waitSince = trackWaiting(this.waitSince, found.filter((a) => a.status === 'waiting').map((a) => a.paneId), Date.now()).since;
       // El visor de un subagente se cierra si su agente ya no existe.
       if (this.subagentView && !found.some((a) => a.paneId === this.subagentView!.paneId)) this.subagentView = null;
       this.trackSessions(found, ids);
@@ -491,6 +511,69 @@ class AppState {
       this.compactLog = pushLog(this.compactLog, { at: Date.now(), title, ctxTokens: a.ctxTokens });
       this.toast(t('store.toast.compacted', { title }));
     }
+  }
+
+  /** Un agente acaba de pasar a esperar: si la ventana no está delante, parpadea en la barra de tareas y (si el ajuste
+   *  de avisos de permiso está encendido) notificación de Windows. Nunca lanza. */
+  private alertOutside(a: be.AgentInfo): void {
+    const focused = typeof document === 'undefined' || document.hasFocus();
+    const plan = alertPlan(focused, this.settings.notifyPermission);
+    if (plan.flash) void be.requestAttention();
+    if (plan.notify) {
+      const name = this.paneById(a.paneId)?.title ?? t('store.agentFallback');
+      const what = (a.waitingFor ?? '').trim();
+      void be.notify(t('attention.notify.title', { name }), what ? t('attention.notify.body', { what }) : t('attention.notify.bodyGeneric'));
+    }
+  }
+
+  /** Aspecto de la caída SSH de un panel (sshdrop.ts). */
+  sshLookOf(p: Pane): SshLook {
+    const st = this.sshState;
+    return sshLook({ kind: p.kind, state: this.live[p.id]?.state, reconnecting: st.reconnecting[p.id], down: st.down[p.id], gaveUp: st.gaveUp[p.id] });
+  }
+  sshDotOf(p: Pane): 'amber' | 'red' | null { return dotOf(this.sshLookOf(p), !!this.sshState.down[p.id]); }
+  sshVeiled(p: Pane): boolean { return veiled(this.sshLookOf(p), !!this.sshState.down[p.id]); }
+
+  /** Punto de caída de un host en la barra lateral: lo peor de sus paneles SSH abiertos (ref = id del host o «cfg:alias»). */
+  hostDot(ref: string): 'amber' | 'red' | null {
+    return worstDot(this.workspaces.flatMap((w) => w.panes.filter((p) => p.kind === 'ssh' && p.ref === ref).map((p) => this.sshDotOf(p))));
+  }
+
+  /** Paneles con un agente esperando respuesta. */
+  get waitingIds(): Set<string> {
+    return new Set(this.agents.filter((a) => a.status === 'waiting').map((a) => a.paneId));
+  }
+
+  /** Ctrl+Shift+A: al siguiente agente que espera (rotando, cambiando de pestaña y sacándolo de segundo plano). */
+  jumpToWaiting(): void {
+    const id = nextWaiting(paneOrder(this.workspaces), this.waitingIds, this.active?.focusId);
+    if (!id) { this.toast(t('attention.none')); return; }
+    this.focusPane(id);
+  }
+
+  /** Salida del pegado de imágenes: atajo crudo al PTY, texto por xterm y avisos. */
+  private pasteIO: PasteIO = {
+    write: (id, data) => be.ptyWrite(id, data),
+    paste: (id, text) => { T.paste(id, text); T.focus(id); },
+    toast: (m) => this.toast(m),
+  };
+
+  /** Pegado sin texto en un panel: si toca imagen (ver imagepaste.ts) la gestiona y devuelve true; si no, xterm sigue. */
+  imagePaste(id: string, clip: { hasText: boolean; hasImage?: boolean }): boolean {
+    const p = this.paneById(id);
+    if (!p) return false;
+    const target = pasteTarget(p, this.accounts, this.hosts);
+    const act = decidePaste(target, clip, this.settings.pasteImages);
+    if (act === 'text') return false;
+    void runImagePaste(this.pasteIO, id, target, act);
+    return true;
+  }
+
+  /** Archivos soltados en un panel desde el Explorador (evento de Rust con las rutas reales). */
+  private fileDrop(id: string, paths: string[]): void {
+    const p = this.paneById(id);
+    if (!p) return;
+    void runDrop(this.pasteIO, id, pasteTarget(p, this.accounts, this.hosts), paths);
   }
 
   paneById(id: string): Pane | undefined {
@@ -816,6 +899,12 @@ class AppState {
 
   // ---------- huella del servidor (hosts con secreto guardado) ----------
 
+  /** Mismo paso de huella que al abrir un panel (lo usa el explorador SFTP). true = se puede conectar. */
+  async ensureHostKey(h: Host): Promise<boolean> {
+    if (hostKeyAction(h, this.settings.sshHostKeyPolicy) === 'spawn') return true;
+    return this.hostKeyGate(h);
+  }
+
   /** true = se puede conectar. false = cancelado, bloqueado o con error (el diálogo explica por qué). */
   private async hostKeyGate(h: Host): Promise<boolean> {
     this.cancelHostKey();
@@ -889,13 +978,13 @@ class AppState {
   }
 
   /** El camino de «Restart» (huella del host, bóveda, refreshSshSpec); la reconexión automática entra por aquí. */
-  private restartNow(id: string): void {
+  private restartNow(id: string, banner?: string): void {
     const p = this.paneById(id);
     if (!p) return;
     const h = p.kind === 'ssh' && p.ref && !p.ref.startsWith('cfg:') ? this.hosts.find((x) => x.id === p.ref) : undefined;
     const go = () => {
       this.refreshSshSpec(p);
-      void T.restart($state.snapshot(p) as Pane);
+      void T.restart($state.snapshot(p) as Pane, banner);
     };
     if (h && hostKeyAction(h, this.settings.sshHostKeyPolicy) !== 'spawn') {
       void this.hostKeyGate(h).then((ok) => { if (ok) go(); });
@@ -1171,7 +1260,7 @@ class AppState {
   /** Copia los hosts como JSON (sin secretos ni ids) al portapapeles. */
   async exportHosts(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(exportHosts($state.snapshot(this.hosts) as Host[]));
+      await be.copyText(exportHosts($state.snapshot(this.hosts) as Host[]));
       const n = this.hosts.length;
       this.toast(n === 1 ? t('store.toast.hostsCopiedOne', { n }) : t('store.toast.hostsCopiedMany', { n }));
     } catch (e) {
@@ -1285,6 +1374,7 @@ class AppState {
     if (ctrl && !ev.shiftKey && ev.code === 'Comma') { this.settingsOpen = !this.settingsOpen; return true; }
     if (ctrl && ev.shiftKey && ev.code === 'KeyP') { this.paletteOpen = true; return true; }
     if (ctrl && ev.shiftKey && ev.code === 'KeyB') { this.toggleSidebar(); return true; }
+    if (ctrl && ev.shiftKey && ev.code === 'KeyA') { this.jumpToWaiting(); return true; }
     if (ctrl && ev.shiftKey && ev.code === 'Enter' && id) { this.toggleMaximize(id); return true; }
     if (ctrl && ev.shiftKey && ev.code === 'KeyW' && id) { this.closePane(id); return true; }
     if (ctrl && ev.shiftKey && ev.code === 'KeyT') {
