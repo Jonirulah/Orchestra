@@ -1,0 +1,170 @@
+[
+  {
+    "name": "code-review",
+    "enabled": false,
+    "disabled_reason": null,
+    "transport": {
+      "type": "stdio",
+      "command": "cmd.exe",
+      "args": [
+        "/d",
+        "/c",
+        "scripts\\launch_code_review_mcp.cmd"
+      ],
+      "env": null,
+      "env_vars": [
+        "PATH",
+        "GH_CONFIG_DIR",
+        "GH_ENTERPRISE_TOKEN",
+        "GH_HOST",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "CODEX_API_KEY",
+        "CODEX_API_BASE_URL",
+        "CODEX_API_ENDPOINT",
+        "CODEX_HOME",
+        "CODEX_CLI_PATH",
+        "CODEX_MCP_NODE_PATH",
+        "CODEX_MANAGED_PACKAGE_ROOT",
+        "GITHUB_PROVIDER_URL",
+        "GITHUB_READ_INDEX",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "SSL_CERT_FILE",
+        "NODE_EXTRA_CA_CERTS"
+      ],
+      "cwd": "C:\\Users\\user\\.codex\\plugins\\cache\\openai-bundled\\code-review\\26.1013.40934\\."
+    },
+    "startup_timeout_sec": null,
+    "tool_timeout_sec": 120,
+    "auth_status": "unsupported"
+  },
+  {
+    "name": "codex_app",
+    "enabled": false,
+    "disabled_reason": null,
+    "transport": {
+      "type": "stdio",
+      "command": "cmd.exe",
+      "args": [
+        "/d",
+        "/s",
+        "/c",
+        "call",
+        "./scripts/launch_codex_app_tools_mcp.cmd",
+        "./server.mjs"
+      ],
+      "env": {
+        "CODEX_APP_TOOLS_DEFERRED": "SECRET_ENV_1"
+      },
+      "env_vars": [
+        "CODEX_APP_TOOLS_PIPE_PATH",
+        "CODEX_MCP_NODE_PATH",
+        "CODEX_BROWSER_USE_NODE_PATH",
+        "CODEX_ELECTRON_RESOURCES_PATH",
+        "CODEX_CLI_PATH",
+        "XDG_CACHE_HOME",
+        "HOME",
+        "USERPROFILE",
+        "LOCALAPPDATA",
+        "PATH"
+      ],
+      "cwd": "C:/Users/user/.codex/plugins/cache/openai-bundled/codex-app-tools/0.1.6"
+    },
+    "startup_timeout_sec": 10,
+    "tool_timeout_sec": 3600,
+    "auth_status": "unsupported"
+  },
+  {
+    "name": "cua_repl",
+    "enabled": true,
+    "disabled_reason": null,
+    "transport": {
+      "type": "stdio",
+      "command": "C:\\Users\\user\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\78fb63cda1a9e2b2\\bin\\node.exe",
+      "args": [
+        "C:\\Users\\user\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\78fb63cda1a9e2b2\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs"
+      ],
+      "env": {
+        "CODEX_HOME": "SECRET_ENV_2",
+        "NODE_REPL_TRUSTED_SERVICES": "SECRET_ENV_3",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME": "SECRET_ENV_4",
+        "NODE_REPL_TRUSTED_CODE_PATHS": "SECRET_ENV_5",
+        "BROWSER_USE_CODEX_APP_BUILD_FLAVOR": "SECRET_ENV_6",
+        "NODE_REPL_UNTRUSTED_ENV_ALLOWLIST": "SECRET_ENV_7",
+        "SKY_CUA_NATIVE_PIPE": "SECRET_ENV_8",
+        "NODE_REPL_NODE_PATH": "SECRET_ENV_9",
+        "CODEX_CLI_PATH": "SECRET_ENV_10",
+        "BROWSER_USE_AVAILABLE_BACKENDS": "SECRET_ENV_11",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER": "SECRET_ENV_12",
+        "NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS": "SECRET_ENV_13",
+        "BROWSER_USE_CODEX_APP_VERSION": "SECRET_ENV_14",
+        "CUA_REPL_NODE_REPL_PATH": "SECRET_ENV_15",
+        "BROWSER_USE_TINYSKY_ENABLED": "SECRET_ENV_16",
+        "NODE_REPL_NODE_MODULE_DIRS": "SECRET_ENV_17",
+        "CUA_REPL_ENABLED_SURFACES": "SECRET_ENV_18",
+        "SKY_CUA_NATIVE_PIPE_DIRECTORY": "SECRET_ENV_19"
+      },
+      "env_vars": [
+        "CODEX_WINDOWS_REGISTERED_CORE"
+      ],
+      "cwd": null
+    },
+    "startup_timeout_sec": 120,
+    "tool_timeout_sec": null,
+    "auth_status": "unsupported"
+  },
+  {
+    "name": "node_repl",
+    "enabled": true,
+    "disabled_reason": null,
+    "transport": {
+      "type": "stdio",
+      "command": "C:\\Users\\user\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\78fb63cda1a9e2b2\\bin\\node_repl.exe",
+      "args": [],
+      "env": {
+        "NODE_REPL_NODE_PATH": "SECRET_ENV_20",
+        "NODE_REPL_TRUSTED_CODE_PATHS": "SECRET_ENV_21",
+        "BROWSER_USE_CODEX_APP_VERSION": "SECRET_ENV_22",
+        "BROWSER_USE_TINYSKY_ENABLED": "SECRET_ENV_23",
+        "BROWSER_USE_CODEX_APP_BUILD_FLAVOR": "SECRET_ENV_24",
+        "SKY_CUA_NATIVE_PIPE": "SECRET_ENV_25",
+        "BROWSER_USE_AVAILABLE_BACKENDS": "SECRET_ENV_26",
+        "SKY_CUA_NATIVE_PIPE_DIRECTORY": "SECRET_ENV_27",
+        "NODE_REPL_TRUSTED_SERVICES": "SECRET_ENV_28",
+        "NODE_REPL_UNTRUSTED_ENV_ALLOWLIST": "SECRET_ENV_29",
+        "CODEX_HOME": "SECRET_ENV_30",
+        "CODEX_CLI_PATH": "SECRET_ENV_31",
+        "NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS": "SECRET_ENV_32",
+        "NODE_REPL_NODE_MODULE_DIRS": "SECRET_ENV_33",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME": "SECRET_ENV_34",
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER": "SECRET_ENV_35"
+      },
+      "env_vars": [
+        "CODEX_WINDOWS_REGISTERED_CORE"
+      ],
+      "cwd": null
+    },
+    "startup_timeout_sec": 120,
+    "tool_timeout_sec": null,
+    "auth_status": "unsupported"
+  },
+  {
+    "name": "unityMCP",
+    "enabled": true,
+    "disabled_reason": null,
+    "transport": {
+      "type": "streamable_http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "bearer_token_env_var": null,
+      "http_headers": null,
+      "env_http_headers": null,
+      "http_headers_helper": null
+    },
+    "startup_timeout_sec": null,
+    "tool_timeout_sec": null,
+    "auth_status": "unknown"
+  }
+]

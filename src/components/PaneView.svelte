@@ -172,6 +172,7 @@
     <span class="grow"></span>
     {#if pane.kind === 'ssh'}<PortsChip {pane} />{/if}
     {#if pane.kind === 'ssh' && pane.ref && !pane.ref.startsWith('cfg:')}<button class="iconbtn" title={t('files.openTitle')} aria-label={t('files.open')} onclick={() => void files.open(pane.ref!, pane.id)}><Icon name="folder" size={13} /></button>{/if}
+    {#if ag?.agent === 'claude'}<button class="iconbtn" class:on={app.consumoPane === pane.id} title={t('consumo.session.openTitle')} aria-label={t('consumo.session.openTitle')} onclick={() => (app.consumoPane = app.consumoPane === pane.id ? null : pane.id)}><Icon name="bars" size={13} /></button>{/if}
     <button class="iconbtn" title={t('pane.searchTitle')} onclick={openSearch}><Icon name="search" size={13} /></button>
     {#if exited}<button class="iconbtn" title={t('pane.restartTitle')} onclick={() => app.restartPane(pane.id)}><Icon name="refresh" size={13} /></button>{/if}
     <button class="iconbtn" title={maximized ? t('pane.restoreTitle') : t('pane.maximizeTitle')} onclick={() => app.toggleMaximize(pane.id)}><Icon name={maximized ? 'restore' : 'max'} size={13} /></button>

@@ -20,7 +20,7 @@ Criterio de hecho (medible):
 - `svelte-check` 0/0, `npm test` verde, `cargo test --bin orchestra` verde, `npm run i18n:check` OK.
 - Ejecución real contra un host: NO hay host real autorizado; probar con un servidor SSH local de prueba si es posible, y decirlo honestamente si no.
 
-Cómo probar / compilar: `CARGO_TARGET_DIR=E:\_cache\orchestra-target`. Instancia aislada con `ORCHESTRA_DATA_DIR` + `WEBVIEW2_USER_DATA_FOLDER`. Hay una instancia de prueba del usuario abierta: no cerrarla. `Copy-Item` conserva mtime -> usar touch si cargo no recompila. Vigilar Latin-1 y CRLF en los ficheros editados.
+Cómo probar / compilar: `CARGO_TARGET_DIR=<cache>\orchestra-target`. Instancia aislada con `ORCHESTRA_DATA_DIR` + `WEBVIEW2_USER_DATA_FOLDER`. Hay una instancia de prueba del usuario abierta: no cerrarla. `Copy-Item` conserva mtime -> usar touch si cargo no recompila. Vigilar Latin-1 y CRLF en los ficheros editados.
 
 No tocar: lógica de terminales, cuentas, temas, release/CI, nada fuera de mcp, ajustes de acceso y su UI mínima, i18n, docs.
 

@@ -377,7 +377,7 @@ fn parsed_cached(path: &Path) -> Option<Parsed> {
     Some(p)
 }
 
-fn find_transcript(config_dir: &Path, session_id: &str) -> Option<PathBuf> {
+pub(crate) fn find_transcript(config_dir: &Path, session_id: &str) -> Option<PathBuf> {
     let projects = config_dir.join("projects");
     let file = format!("{session_id}.jsonl");
     std::fs::read_dir(projects)
@@ -546,7 +546,7 @@ pub async fn agent_scan(
 
 /// UUID de sesión tal como lo escribe Claude (`[0-9a-f-]{36}`). Es lo único que se admite antes de usarlo como
 /// nombre de archivo o como argumento de `claude --resume`.
-fn is_session_id(id: &str) -> bool {
+pub(crate) fn is_session_id(id: &str) -> bool {
     id.len() == 36 && id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b) || b == b'-')
 }
 

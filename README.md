@@ -44,6 +44,9 @@ xterm.js: an executable of about 10 MB, no Electron.
 - Real PTYs (ConPTY). Output is buffered (2 MiB per terminal) and replayed when the window comes back from the tray.
 - PowerShell, cmd, Git Bash and WSL distributions are detected automatically.
 - Context menus (sidebar, accounts, grid background, status bar) and a command palette (`Ctrl+Shift+P`).
+- **Paste images** into a terminal (`Ctrl+V` with an image in the clipboard, or drop image files on a pane): local panes get the
+  path of a PNG saved in a cache folder; in SSH panes the image is uploaded to the server first. **Copy** goes through the system
+  clipboard with a visible "Copied" / error notice, also from apps that use the mouse (hold `Shift` to select) and via OSC 52.
 
 **SSH**
 - Host list with groups and tags, `~/.ssh/config` import, quick connect (`user@host:port`), optional persistent `tmux` session,
@@ -55,7 +58,13 @@ xterm.js: an executable of about 10 MB, no Electron.
 - SSH key manager: list the keys in `~/.ssh`, generate an ed25519 key, copy the public key, install it on a server.
 - **Auto-reconnect** with backoff when an established session drops (countdown bar, *Reconnect now*, *Cancel*) and a **latency
   badge** in every SSH pane header (green / amber / red; tooltip with last, min, avg, max and loss). Both are on by default and every
-  number is adjustable.
+  number is adjustable. A dropped SSH pane is veiled with its state (reconnecting, attempt N, or gave up and why) and, when it comes
+  back, a separator marks how long it was down.
+- **Files** (SFTP) drawer per SSH pane: browse, filter, upload (button or drop), download, create folders, rename and delete, with
+  progress and cancel. It talks SFTP over the same `ssh.exe`, so keys, vault and jump hosts work the same.
+- **Port forwarding**: when a program in an SSH pane starts listening (for example a dev server on `localhost:3000`), a notice
+  offers to forward it; the pane's ports chip lists the tunnels (open in browser, copy URL, keep for every connection, stop).
+  Tunnels reconnect on their own and keep the same local port.
 - Optional **server metrics** in the status bar (CPU, RAM, disk, network, uptime of the *server*), read over a second small SSH
   connection; per host, off by default, Linux servers only.
 
@@ -68,12 +77,24 @@ xterm.js: an executable of about 10 MB, no Electron.
 - **Usage bars** (5-hour and 7-day windows, time to reset) captured from Claude Code's status line, and an optional, **opt-in**
   query to Anthropic that works even with no terminal open.
 - **Active-agents tree** with status, tasks, subagents and tokens per session (main thread and subagents separately); click to
-  focus the terminal. **Subagent viewer**: a read-only drawer that follows a subagent's transcript live.
+  focus the terminal. **`Ctrl+Shift+A`** jumps to the next agent waiting for you (across tabs) and the *Need attention* list shows
+  them all; optional Windows notification when Orchestra is not in front. **Subagent viewer**: a read-only drawer that follows a subagent's transcript live.
 - Account selection policy (manual, round-robin, soonest reset, most free quota) and optional **auto-compact** while you are away
   (types `/compact` into an idle Claude shortly before its prompt cache expires; experimental).
 - A local **MCP server** lets agents see the hosts and terminals you explicitly allow (per-host permission, audit log). Access per host is
   `read` (agents read terminals), `ask` (they can also run a command with `run_command`, but only after you approve that exact
   command in a dialog) or `full` (they run commands without asking). Every attempt is audited.
+- **MCP view** (top bar → **MCP**): every MCP server of every account in one table (Claude user and local scopes, Codex,
+  opencode). Test them (tools found, or why not), install one in several accounts at once from a form or a command pasted from a
+  README, see side by side when the same server has two versions and make the others equal to one, remove it, and approve, turn on
+  or sign in where the account needs it. Every change shows the exact edit first and can be undone. Each server shows roughly how
+  many tokens its tool definitions add to every session.
+- **Consumption view** (top bar → **Consumption**): where your Claude Code tokens go, read from the local transcripts (nothing is
+  sent anywhere). By period (today, 7 or 30 days), session, project, model and subagent, in input-token equivalents or estimated
+  USD at API prices; a drawer per pane shows the current session. **Advice** cards point at the biggest wastes (files read whole
+  again and again, caches that expire during pauses, a heavy fixed base…) with the saving as "before → after" and the assumption
+  behind it. **Copy report for your AI** gives a Markdown summary to paste into a chat, and the MCP server exposes the same report
+  as the `usage_report` tool.
 
 **Status bar**
 - A thin bar at the bottom: hostname, CPU, RAM, disk read/write, network down/up, uptime, working / waiting agents and the highest
@@ -98,7 +119,9 @@ xterm.js: an executable of about 10 MB, no Electron.
 |---|---|
 | ![Sidebar with accounts grouped by provider](docs/screenshots/sidebar-accounts.png)<br>Accounts grouped by provider, with usage bars | ![Subagent viewer drawer](docs/screenshots/subagent-drawer.png)<br>Subagent viewer: a live, read-only transcript |
 | ![Status bar of an SSH tab](docs/screenshots/statusbar-ssh.png)<br>Status bar of an SSH tab showing the server's metrics | ![Terminal settings](docs/screenshots/settings-terminal.png)<br>Settings → Terminal |
-| ![Backup in Settings → Data](docs/screenshots/settings-data-backup.png)<br>Settings → Data: full backup | |
+| ![Backup in Settings → Data](docs/screenshots/settings-data-backup.png)<br>Settings → Data: full backup | ![Settings → Agents, auto-compact](docs/screenshots/settings-autocompact.png)<br>Settings → Agents: auto-compact when away, and why it is not acting now |
+| ![MCP view with tested servers](docs/screenshots/mcp-view.png)<br>MCP view: every server of every account, tested, with two versions of one | ![Installing an MCP server in several accounts](docs/screenshots/mcp-install-preview.png)<br>Installing a server in three accounts: the exact change, before applying |
+| ![Consumption view, last 7 days](docs/screenshots/consumption-view.png)<br>Consumption, last 7 days: where the tokens go and advice with the saving | ![Session consumption drawer next to the terminal](docs/screenshots/consumption-session.png)<br>Consumption of one session, next to its terminal |
 
 ## Install
 
@@ -245,7 +268,7 @@ Orchestra 0.3.0 (0.1.0 was the first public release) is a one-person project. Ne
 - **The installer has not been install-tested** on a clean machine, and **CI has never run** (the workflow exists but has not been
   executed on GitHub yet).
 - **Windows only.** No macOS or Linux build.
-- **Not included**: SFTP / file transfer, MCP typing into terminals and file transfer (only `run_command` exists), tunnels, snippets and broadcast, usage bars for
+- **Not included**: MCP typing into terminals and file transfer over MCP (only `run_command` exists), snippets and broadcast, usage bars for
   Codex / opencode. SSH panes do not show the git chip; remote metrics are Linux-only; Codex / opencode sessions are only detected by
   process name (no tokens or session data).
 - Code comments, `docs/DISENO.md` and the files in `docs/dev-notes/` are largely in Spanish.

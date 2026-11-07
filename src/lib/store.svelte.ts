@@ -3,18 +3,17 @@ import * as T from './terminals.ts';
 import { decidePaste, pasteTarget } from './imagepaste.ts';
 import { runDrop, runImagePaste } from './imagepasterun.ts';
 import type { PasteIO } from './imagepasterun.ts';
-import { compactKey, decideCompact, pushLog } from './autocompact.ts';
-import type { CompactLogEntry } from './autocompact.ts';
+import { compactKey, decideCompact, nextDraft, parseDevOverride, pushLog } from './autocompact.ts';
+import type { CompactLogEntry, DevOverride, DraftState } from './autocompact.ts';
 import {
   ACCOUNT_COLORS, accountDir, accountTitle, claudeSpec, codexSpec, emptyHost, equalTracks, movePaneToCell, neighbor,
   newWorkspace, parseQuickConnect, placePane, reflow, removePane, resizeTracks, slug, sshAliasArgs,
   sshArgs, sshTarget, swapPanes, uid, restorableSpec,
   exportHosts, hostFromSshConfig, hostSecretKey, newConfigEntries, normalizeHost, sshInstallKeySpec, sshSpec,
   hostKeyAction, normalizeAccounts, providerOf, providerSpec,
-  isSessionId, resumeCandidate, restoreSpecFor, sessionForSave, stripResume, trackSession,
-} from './model.ts';
+  isSessionId, resumeCandidate, restoreSpecFor, sessionForSave, stripResume, trackSession, mcpLoginSpec } from './model.ts';
 import type { Account, Dir, Host, Pane, Provider, Workspace } from './model.ts';
-import { displayName, hostKeyBlockedMsg } from './model.ts';
+import { claudeAccountName, displayName, hostKeyBlockedMsg } from './model.ts';
 import { fmtDuration, nextAlert, pickAccount } from './policy.ts';
 import type { AccountPolicy, AlertState, Quota } from './policy.ts';
 import { buildMcpSnapshot } from './mcpsync.ts';
@@ -30,7 +29,8 @@ import type { ItemId } from './statusbar.ts';
 import { DEFAULT_THEME, MAX_CUSTOM_THEMES, hasTheme, resolveTheme } from './themes.ts';
 import type { ThemeDef } from './themes.ts';
 import { sanitizeCustomThemes, sanitizeName, withUniqueIds } from './themeimport.ts';
-import { resolveLanguage, setLocale, t } from './i18n.ts';
+import { getLocale, resolveLanguage, setLocale, t } from './i18n.ts';
+import { cleanDismissed } from './consumo.ts';
 import { SshConn } from './sshconn.ts';
 import type { ConnState } from './sshconn.ts';
 import { dotOf, separatorText, sshLook, veiled, worstDot } from './sshdrop.ts';
@@ -78,7 +78,9 @@ export type OpenReq =
   /** Cuenta de Codex u opencode (o cualquiera): `login` = su inicio de sesión en vez del agente. */
   | { kind: 'account'; accountId: string; login?: boolean; cwd?: string }
   | { kind: 'quick'; text: string }
-  | { kind: 'sshinstall'; hostId: string; pubPath: string };
+  | { kind: 'sshinstall'; hostId: string; pubPath: string }
+  /** Vista MCP: iniciar sesión en un servidor MCP con esa cuenta (sin cuenta = el Codex de siempre). */
+  | { kind: 'mcplogin'; provider: 'claude' | 'codex' | 'opencode'; accountId: string | null; name: string; cwd?: string; hint?: string };
 
 class AppState {
   ready = $state(false);
@@ -125,6 +127,14 @@ class AppState {
   agents = $state<be.AgentInfo[]>([]);
   /** Visor de solo lectura de un subagente (panel del agente + id del subagente); null = cerrado. */
   subagentView = $state<{ paneId: string; subId: string } | null>(null);
+  /** Vista global de Consumo (capa sobre la zona de paneles). */
+  consumoOpen = $state(false);
+  /** Cajón de consumo de la sesión de un panel; null = cerrado. */
+  consumoPane = $state<string | null>(null);
+  /** Cajón de consumo abierto por la ruta de un transcript (prueba de un consejo de la vista global). */
+  consumoPath = $state<string | null>(null);
+  /** Consejos descartados («Ya lo sé»): ids regla:caso. Se guarda; el MCP también lo lee. */
+  consumoDismissed = $state<string[]>([]);
   /** Cuota por cuenta (límites de 5 h / 7 d que guarda el envoltorio de statusline; vacía = sin datos). */
   quota = $state<Record<string, Quota>>({});
   /** Resultado de la última consulta de uso a Anthropic por cuenta (vacío = apagada o aún sin consultar). */
@@ -153,6 +163,15 @@ class AppState {
   private hostKeyResolve: ((ok: boolean) => void) | null = null;
   accountDialog = $state(false);
   settingsOpen = $state(false);
+  /** Vista MCP (capa a pantalla completa sobre los paneles). */
+  mcpOpen = $state(false);
+  /** Cuenta de la barra lateral bajo el ratón o el foco mientras la vista MCP está abierta (id de la cuenta o
+   *  'codex-launcher'): la vista resalta su columna y la desplaza a la vista. */
+  mcpHover = $state<string | null>(null);
+  /** Barra lateral plegada mientras la vista MCP tiene el panel abierto y la tabla no cabe (no se guarda en ajustes). */
+  mcpFold = $state(false);
+  /** Resultados de «Probar» de la vista MCP (clave = probeKey): sobreviven a cerrar la vista; se tiran si cambia la huella. */
+  mcpProbeMemo: Record<string, import('./mcpprobememo.ts').ProbeMemo> = {};
   /** Sección abierta en Ajustes; vive aquí para sobrevivir al remontado que provoca cambiar de idioma. */
   settingsTab = $state<string>('general');
   /** Carpetas de cuenta que el usuario quitó de la lista: no se vuelven a añadir al escanear. */
@@ -163,6 +182,12 @@ class AppState {
   /** Auto-compact: últimos 20 compactados (solo en memoria). */
   compactLog = $state<CompactLogEntry[]>([]);
   private compactDone = new Set<string>();
+  /** Auto-compact: último motivo de cada panel con Claude («ok» = se compactó en ese escaneo). Para Ajustes. */
+  compactReasons = $state<Record<string, string>>({});
+  /** Lo tecleado por el usuario en cada panel (borrador sin enviar). No es reactivo: solo lo lee el escaneo. */
+  private drafts = new Map<string, DraftState>();
+  /** Solo desarrollo (`ORCHESTRA_DEV_AUTOCOMPACT`): umbrales sin los límites de Settings. */
+  compactDev = $state<DevOverride | null>(null);
   home = '';
   private saveTimer: number | undefined;
   private scanTimer: number | undefined;
@@ -191,6 +216,7 @@ class AppState {
         this.accounts = normalizeAccounts(st.accounts);
         this.settings = clampSettings(st.settings);
         this.ignoredDirs = Array.isArray(st.ignoredDirs) ? st.ignoredDirs.filter((d: unknown) => typeof d === 'string') : [];
+        this.consumoDismissed = cleanDismissed(st.consumoDismissed);
         this.customThemes = sanitizeCustomThemes(st.customThemes);
       }
       this.savedWorkspaces = SW.normalizeSaved(st?.savedWorkspaces); // estados de antes: sin la clave = lista vacía
@@ -246,9 +272,14 @@ class AppState {
         onShiftHint: () => this.toast(t('terminals.copy.shiftHint')),
         onCwd: (id, cwd) => { if (this.live[id]?.cwd !== cwd) this.setLive(id, { cwd }); },
         trackFolder: () => this.settings.gitTrackFolder,
+        onInput: (id, data) => this.drafts.set(id, nextDraft(this.drafts.get(id), data, Date.now())),
       },
       this.termOptions(),
     );
+    void be.devAutocompactOverride().then((raw) => {
+      this.compactDev = parseDevOverride(raw);
+      if (this.compactDev) be.devAutocompactLog(`${new Date().toISOString()} dev override ${JSON.stringify(this.compactDev)}`);
+    }).catch(() => {});
     this.applyAppearance();
     void be.onFileDrop((id, paths) => this.fileDrop(id, paths));
     be.setCloseToTray(this.settings.closeToTray);
@@ -418,11 +449,26 @@ class AppState {
     const data = $state.snapshot({
       version: 1, workspaces: this.workspaces, activeId: this.activeId,
       hosts: this.hosts, accounts: this.accounts, settings: this.settings, ignoredDirs: this.ignoredDirs,
-      customThemes: this.customThemes, savedWorkspaces: this.savedWorkspaces,
+      customThemes: this.customThemes, savedWorkspaces: this.savedWorkspaces, consumoDismissed: this.consumoDismissed,
     });
     // Un panel de «Sign in» no debe repetir el login al restaurarse.
     data.workspaces = data.workspaces.map((w) => ({ ...w, panes: w.panes.map((p) => ({ ...p, spec: restorableSpec(p.spec), ...(p.lastSession ? { lastSession: sessionForSave(p.lastSession, this.live[p.id]) } : {}) })) }));
     void be.saveState(JSON.stringify(data));
+  }
+
+  /** Opciones del motor de consejos: idioma de la interfaz y descartes. */
+  adviceOpts(): be.ConsumoAdviceOpts {
+    return { lang: getLocale(), dismissed: [...this.consumoDismissed] };
+  }
+  /** «Ya lo sé»: ese caso no vuelve (ni en la interfaz ni en el informe ni en el MCP). */
+  dismissAdvice(id: string): void {
+    this.consumoDismissed = cleanDismissed([...this.consumoDismissed, id]);
+    this.persist();
+  }
+  /** Vuelve a mostrar todos los consejos descartados. */
+  restoreAdvice(): void {
+    this.consumoDismissed = [];
+    this.persist();
   }
 
   toast(msg: string): void {
@@ -494,23 +540,43 @@ class AppState {
   /** Escribe `/compact` en los agentes Claude ociosos con la caché aún caliente mientras el usuario está ausente. */
   private async autoCompactCheck(found: be.AgentInfo[]): Promise<void> {
     const s = this.settings;
-    if (!s.autoCompact) return;
+    const claudes = found.filter((a) => a.agent === 'claude');
+    const reasons: Record<string, string> = {};
+    const finish = () => {
+      if (JSON.stringify(reasons) === JSON.stringify(this.compactReasons)) return;
+      if (this.compactDev) {
+        for (const [id, r] of Object.entries(reasons)) {
+          if (this.compactReasons[id] !== r) be.devAutocompactLog(`${new Date().toISOString()} pane=${id} reason=${r}`);
+        }
+      }
+      this.compactReasons = reasons;
+    };
+    if (!s.autoCompact) { for (const a of claudes) reasons[a.paneId] = 'disabled'; finish(); return; }
     const nowSec = Math.floor(Date.now() / 1000);
+    const dev = this.compactDev;
     const input = (a: be.AgentInfo, userIdleSec: number | null) => ({
-      enabled: s.autoCompact, agent: a, nowSec, userIdleSec, ctxK: s.autoCompactCtxK,
-      afterMin: s.autoCompactAfterMin, userIdleMin: s.autoCompactUserIdleMin, done: this.compactDone,
+      enabled: s.autoCompact, agent: a, nowSec, userIdleSec,
+      ctxK: dev?.ctxK ?? s.autoCompactCtxK,
+      afterMin: dev?.afterMin ?? s.autoCompactAfterMin,
+      userIdleMin: dev?.userIdleMin ?? s.autoCompactUserIdleMin,
+      done: this.compactDone, draft: this.drafts.get(a.paneId),
     });
-    const cands = found.filter((a) => decideCompact(input(a, null)).reason === 'needs-idle-check');
-    if (!cands.length) return;
+    for (const a of claudes) reasons[a.paneId] = decideCompact(input(a, null)).reason;
+    const cands = claudes.filter((a) => reasons[a.paneId] === 'needs-idle-check');
+    if (!cands.length) { finish(); return; }
     const idle = await be.systemIdleSeconds(); // una sola consulta por escaneo
     for (const a of cands) {
-      if (!decideCompact(input(a, idle)).compact) continue;
+      const d = decideCompact(input(a, idle));
+      reasons[a.paneId] = d.reason;
+      if (!d.compact) continue;
       this.compactDone.add(compactKey(a));
       be.ptyWrite(a.paneId, '/compact\r');
+      be.devAutocompactLog(`${new Date().toISOString()} WROTE /compact pane=${a.paneId} session=${a.sessionId} ctx=${a.ctxTokens} lastRequestAt=${a.lastRequestAt} ttl=${a.cacheTtl}`);
       const title = this.paneById(a.paneId)?.title ?? a.title ?? t('store.agentFallback');
       this.compactLog = pushLog(this.compactLog, { at: Date.now(), title, ctxTokens: a.ctxTokens });
       this.toast(t('store.toast.compacted', { title }));
     }
+    finish();
   }
 
   /** Un agente acaba de pasar a esperar: si la ventana no está delante, parpadea en la barra de tareas y (si el ajuste
@@ -601,8 +667,7 @@ class AppState {
     for (const pr of this.profiles) {
       if (this.claudeAccounts.some((a) => norm(a.dir) === norm(pr.dir))) continue;
       if (this.ignoredDirs.some((d) => norm(d) === norm(pr.dir))) continue;
-      const base = pr.dir.replace(/\\/g, '/').split('/').pop() ?? 'claude';
-      const name = pr.isDefault ? 'Main' : base.replace(/^\.claude-?/, '') || base;
+      const name = claudeAccountName(pr.dir, pr.isDefault);
       this.accounts.push({
         id: uid('acc'), name, dir: pr.dir, isDefault: pr.isDefault, provider: 'claude',
         color: ACCOUNT_COLORS[this.accounts.length % ACCOUNT_COLORS.length],
@@ -864,6 +929,12 @@ class AppState {
         const title = req.login ? t('store.pane.signIn', { name: accountTitle(acc) }) : accountTitle(acc);
         return this.basePane('agent', 'bot', title, acc.id,
           providerSpec(acc, { cwd: req.cwd ?? (this.settings.agentCwd || this.home || undefined), login: req.login }));
+      }
+      case 'mcplogin': {
+        const acc = req.accountId ? this.accountById(req.accountId) ?? null : null;
+        if (req.accountId && !acc) return null;
+        return this.basePane('agent', 'bot', t('store.pane.mcpLogin', { name: req.name }), acc?.id,
+          mcpLoginSpec(req.provider, acc, req.name, { cwd: req.cwd ?? (this.settings.agentCwd || this.home || undefined), hint: req.hint }));
       }
       case 'quick': {
         const q = parseQuickConnect(req.text);

@@ -5,6 +5,7 @@
     terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
     server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><line x1="7" y1="7.5" x2="7.01" y2="7.5"/><line x1="7" y1="16.5" x2="7.01" y2="16.5"/>',
     bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><line x1="12" y1="8" x2="12" y2="4"/><circle cx="12" cy="3.5" r="1"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/>',
+    bars: '<line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="16" x2="7" y2="11"/><line x1="12" y1="16" x2="12" y2="5"/><line x1="17" y1="16" x2="17" y2="8"/>',
     plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
     x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
     max: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
@@ -15,6 +16,7 @@
     sidebar: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>',
     down: '<polyline points="6 9 12 15 18 9"/>',
     right: '<polyline points="9 18 15 12 9 6"/>',
+    left: '<polyline points="15 18 9 12 15 6"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/>',
     bolt: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
@@ -45,6 +47,12 @@
     external: '<path d="M14 4h6v6"/><line x1="20" y1="4" x2="11" y2="13"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
     pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3Z"/><line x1="12" y1="15" x2="12" y2="21"/>',
     tunnel: '<path d="M4 20V11a8 8 0 0 1 16 0v9"/><path d="M9 20v-6a3 3 0 0 1 6 0v6"/><line x1="2" y1="20" x2="22" y2="20"/>',
+    // Ámbitos de un MCP (vista MCP): carpeta = local, caja = proyecto (.mcp.json), globo = global, pieza = plugin, nube = claude.ai.
+    box: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>',
+    puzzle: '<path d="M10 3h4v3a2 2 0 1 0 4 0V6h3v5h-2a2 2 0 1 0 0 4h2v6h-5v-2a2 2 0 1 0-4 0v2H3v-6h2a2 2 0 1 0 0-4H3V6h7z"/>',
+    cloud: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 9.2 4.4 4.4 0 0 0 7 18z"/>',
+    more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   };
 </script>
 

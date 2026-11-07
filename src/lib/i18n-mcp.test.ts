@@ -12,8 +12,11 @@ afterEach(() => setLocale('en'));
 const E = en as Record<string, string>;
 const S = es as Record<string, string>;
 const keys = Object.keys(E).filter((k) => k.startsWith('settings.mcp.'));
-// Iguales en los dos idiomas a propósito: «Token» se escribe igual y no se traduce.
-const SAME = new Set(['settings.mcp.tokenLabel']);
+// Iguales a propósito: nombres propios, palabras que se escriben igual (Local, Global, Plugin, URL, Variables) y plantillas.
+const SAME = new Set(['settings.mcp.edit.tr.http', 'settings.mcp.edit.addVar', 'settings.mcp.tokenLabel', 'settings.mcp.servers.costRow',
+  'settings.mcp.servers.scope.local', 'settings.mcp.servers.scope.plugin',
+  'settings.mcp.servers.scopeShort.local', 'settings.mcp.servers.scopeShort.plugin',
+  'settings.mcp.servers.scopeShort.claudeai', 'settings.mcp.servers.dUrl', 'settings.mcp.servers.dEnv']);
 const vars = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
 test('settings.mcp.*: Spanish differs from English (except the listed ones) and {vars} match', () => {

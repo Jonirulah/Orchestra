@@ -13,3 +13,5 @@ pending and which files were touched. They are history, not documentation: for h
 | `_estado_autocompact.md` | Auto-compact when away |
 | `_estado_mcp.md` | MCP server, phase 1 |
 | `_estado_vault.md`, `_estado_vault_fase1.md` | SSH vault, phase 1 |
+| `diseno_gestor_mcp.md` | Design of the MCP view |
+| `diseno_consumo.md`, `investigacion_consumo_codex_opencode.md` | Design of the Consumption view; research on Codex and opencode usage data |

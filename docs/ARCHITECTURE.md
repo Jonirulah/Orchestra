@@ -162,6 +162,29 @@ The frontend pushes a sanitized snapshot (`mcp_sync`) of hosts and panes — no 
 log. Claude panes launched by Orchestra receive `--mcp-config <file>` (always the last argument: the flag is variadic) so no global configuration is touched.
 Untrusted text (names, titles, terminal output) is sanitized in the core before it is stored or returned, terminal output is fenced with a per-call nonce, and the host permission is re-checked after the output is read. The token and config files are restricted to the current user via `icacls`; `McpManager::shutdown` (on app exit) stops the server and empties `claude-mcp.json`. See SECURITY.md for the threat model and remaining limits.
 
+## MCP manager (`mcp_manager.rs`, read-only so far)
+
+Not the server above: this lists the MCP servers *configured in each account* and probes one on demand (design and phases in
+`docs/dev-notes/diseno_gestor_mcp.md`). `mcpm_list` reads, without starting anything: Claude `<CLAUDE_CONFIG_DIR>\.claude.json`
+(default account: `%USERPROFILE%\.claude.json`) → `mcpServers` (user) and `projects[<path>].mcpServers` (local); Codex
+`codex mcp list --json` with the account's `CODEX_HOME` (10 s, hidden window, accounts in parallel); opencode `mcp` of
+`~/.config/opencode/opencode.json(c)` (JSONC, one global account). Each entry becomes an `McpDef`; env and header **values never
+leave Rust** (only names), URL query values, URL passwords and key-looking arguments become `•••`. `fingerprint` hashes the real
+definition with a per-process random key, so it groups identical definitions during the session without letting anyone test a
+guessed key. Per-account failures go in `McpAccount.error`. `mcpm_probe` re-reads the definition, runs `initialize` +
+`tools/list` (stdio: spawned suspended into a Job Object with KILL_ON_JOB_CLOSE, so the whole `npx → node` tree dies; http:
+POST, JSON or SSE answers; legacy sse: GET stream + endpoint), 10 s total, and returns `ok | needsAuth | failed | timeout`
+(the failure message is the first stderr line with known secrets and key-looking words removed). An `ok` result also carries
+`toolsBytes` (compact JSON of every tool definition, all pages) and `tokensEst` (≈ bytes / 4): what the server adds to each session.
+
+Also read without starting anything (Claude): `.mcp.json` of the folders of the open local panes (`mcpm_list(projects)`, scope
+`project`, approval from `enabled/disabledMcpjsonServers` and `enableAllProjectMcpServers`), `projects[p].disabledMcpServers`
+(→ `McpDef.disabledIn`), plugin MCP servers (`plugins/installed_plugins.json` + `enabledPlugins` + the plugin's
+`.claude-plugin/plugin.json` or `.mcp.json`, scope `plugin`) and claude.ai connectors seen before (`claudeAiMcpEverConnected`,
+scope `claudeai`, name only, cannot be probed). `mcpm_stamp(projects)` hashes path + mtime + size of every file read; the UI
+(Settings → MCP servers, `SettingsMcpServers.svelte` + pure `src/lib/mcpmatrix.ts`) polls it every 4 s while visible and re-lists on
+change. Probe results live only in that component.
+
 ## SSH vault (`vault.rs`)
 
 Secrets are stored in the Windows Credential Manager (`keyring` crate, service `dev.orchestra.app`) and are write-only from
@@ -213,6 +236,19 @@ State: `app.subagentView = { paneId, subId } | null`; it is cleared when its age
 `decideCompact` is a pure function: agent is a Claude and idle, context above a threshold, time since the last request is
 inside the window `[afterMin, cacheTtl − 3 min)`, the user has been away (Windows `GetLastInputInfo`), and this
 `(sessionId, lastRequestAt)` was not handled yet. If everything holds, `/compact` is typed once. Off by default.
+
+- **Unsent draft (`user-typed`).** `terminals.ts` reports every `term.onData` chunk (keyboard and paste only; what the app writes with
+  `ptyWrite` does not go through it) and `nextDraft` keeps per pane whether there is unsent text: a chunk ending in Enter submits,
+  Ctrl+C alone clears (Claude empties its prompt), terminal replies (focus, mouse, cursor/DA reports, OSC) and a lone Esc change
+  nothing, anything else (text, paste, Backspace, arrows that recall history) leaves a draft. Time alone is not enough: a draft typed
+  while the agent was busy is older than `lastRequestAt` and still in the prompt. Conservative: deleting a draft with Backspace still
+  counts as a draft until Enter or Ctrl+C.
+- **`ttl-too-short`.** When `afterMin ≥ ttl − 3` (the 5 min cache) the window is empty and the reason says so instead of
+  too-early/too-late.
+- **Settings** shows, per running Claude agent, the last reason in plain words (`app.compactReasons`, refreshed each scan).
+- **Dev override.** `ORCHESTRA_DEV_AUTOCOMPACT=ctxK=1,afterSec=15,idleSec=0` (read by `dev_autocompact_override`) bypasses the
+  Settings limits so the real flow can be tested in seconds; with it set, decisions and writes are appended to
+  `<data dir>/autocompact-dev.log`. Without the variable nothing changes.
 
 ## SSH latency badge and auto-reconnect (`sshconn.ts`, `latency.ts`, `reconnect.ts`, `net.rs`)
 

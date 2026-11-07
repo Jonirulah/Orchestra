@@ -26,6 +26,9 @@ import hostDialog from './hostDialog.ts';
 import settingsKeys from './settingsKeys.ts';
 import hostkeyConfirm from './hostkeyConfirm.ts';
 import settingsMcp from './settingsMcp.ts';
+import settingsMcpServers from './settingsMcpServers.ts';
+import settingsMcpEdit from './settingsMcpEdit.ts';
+import mcpView from './mcpView.ts';
 import mcpApproval from './mcpApproval.ts';
 import settingsUsage from './settingsUsage.ts';
 import providers from './providers.ts';
@@ -36,6 +39,7 @@ import updater from './updater.ts';
 import attention from './attention.ts';
 import files from './files.ts';
 import ports from './ports.ts';
+import consumo from './consumo.ts';
 
 export const en = {
   ...app,
@@ -65,6 +69,9 @@ export const en = {
   ...settingsKeys,
   ...hostkeyConfirm,
   ...settingsMcp,
+  ...settingsMcpServers,
+  ...settingsMcpEdit,
+  ...mcpView,
   ...mcpApproval,
   ...settingsUsage,
   ...providers,
@@ -75,4 +82,5 @@ export const en = {
   ...attention,
   ...files,
   ...ports,
+  ...consumo,
 };

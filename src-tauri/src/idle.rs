@@ -50,9 +50,48 @@ pub fn system_idle_seconds() -> u64 {
     idle_seconds()
 }
 
+/// Solo desarrollo: `ORCHESTRA_DEV_AUTOCOMPACT=ctxK=1,afterSec=30,idleSec=0` salta los límites de Settings
+/// para probar el auto-compact de verdad sin esperar 50 min (ver docs/ARCHITECTURE.md, «Auto-compact»).
+const DEV_VAR: &str = "ORCHESTRA_DEV_AUTOCOMPACT";
+
+fn dev_value(v: Option<std::ffi::OsString>) -> Option<String> {
+    v.map(|s| s.to_string_lossy().into_owned()).filter(|s| !s.trim().is_empty())
+}
+
+#[tauri::command]
+pub fn dev_autocompact_override() -> Option<String> {
+    dev_value(std::env::var_os(DEV_VAR))
+}
+
+/// Con la variable de desarrollo puesta, añade una línea a `autocompact-dev.log` en la carpeta de datos
+/// (decisiones y escrituras de `/compact`). Sin la variable no hace nada.
+#[tauri::command]
+pub fn dev_autocompact_log(app: tauri::AppHandle, line: String) -> Result<(), String> {
+    if dev_value(std::env::var_os(DEV_VAR)).is_none() {
+        return Ok(());
+    }
+    use std::io::Write;
+    let dir = crate::store::base_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("autocompact-dev.log"))
+        .map_err(|e| e.to_string())?;
+    let line: String = line.chars().filter(|c| !c.is_control()).take(500).collect();
+    writeln!(f, "{line}").map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dev_override_empty_is_none() {
+        assert_eq!(dev_value(None), None);
+        assert_eq!(dev_value(Some("  ".into())), None);
+        assert_eq!(dev_value(Some("ctxK=1".into())).as_deref(), Some("ctxK=1"));
+    }
 
     #[test]
     fn tick_delta_plain() {

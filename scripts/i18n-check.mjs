@@ -87,6 +87,13 @@ const used = new Set();
 const prefixes = [];
 let dynamicOpaque = 0;
 for (const [f, src] of text) {
+  // tn('base', n): plural; it uses base.one and base.other.
+  for (const m of src.matchAll(/\btn\(\s*(['"])([^'"\n]+)\1/g)) {
+    for (const k of [`${m[2]}.one`, `${m[2]}.other`]) {
+      used.add(k);
+      if (!(k in en)) err(`${rel(f)}:${lineOf(src, m.index)}: tn('${m[2]}') needs ${k} in locales/en`);
+    }
+  }
   for (const m of src.matchAll(/\b(t|tk)\(\s*(['"`])((?:(?!\2)[^\\\n])*)\2/g)) {
     const [, fn, , body] = m;
     if (body.includes('${')) {

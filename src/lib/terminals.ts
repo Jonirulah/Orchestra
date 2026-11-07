@@ -27,6 +27,8 @@ export interface TermHooks {
   onOutput(id: string, seen: boolean): void;
   /** Devuelve true si la tecla es un atajo de la app (no se envía al terminal). */
   onShortcut(ev: KeyboardEvent, id: string): boolean;
+  /** Entrada del usuario (teclado, pegar) que va al PTY, antes de enviarla. Lo que escribe la app con `ptyWrite` no pasa por aquí. */
+  onInput?(id: string, data: string): void;
   /** Pegado SIN texto (Ctrl+V o clic derecho): devuelve true si lo gestiona el pegado de imágenes (ver imagepaste.ts). */
   onImagePaste?(id: string, clip: { hasText: boolean; hasImage?: boolean }): boolean;
   /** Se soltaron archivos pero no hay puente de WebView2 (navegador de pruebas). */
@@ -177,7 +179,7 @@ function create(id: string): Entry {
 
   const entry: Entry = { id, term, fit, search, el, mounted: false, lastCols: 0, lastRows: 0 };
 
-  term.onData((d) => be.ptyWrite(id, d));
+  term.onData((d) => { hooks.onInput?.(id, d); be.ptyWrite(id, d); });
   term.onTitleChange((t) => hooks.onTitle(id, t));
   term.onBell(() => { if (opts.bell === 'flash') hooks.onBell(id); });
   registerCwdOsc(term, id);

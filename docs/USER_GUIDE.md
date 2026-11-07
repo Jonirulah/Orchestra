@@ -6,7 +6,7 @@ Task-oriented recipes for Orchestra 0.1.0. Menu and button names are written as 
 [SECURITY.md](SECURITY.md).
 
 Contents: [Accounts](#accounts) · [SSH](#ssh) · [Status bar](#status-bar) · [Git chip](#git-branch-chip-and-folder-tracking) ·
-[Agents](#agents-subagents-and-usage) · [Themes](#themes) · [Backup and restore](#backup-and-restore) ·
+[Agents](#agents-subagents-and-usage) · [MCP view](#mcp-view) · [Consumption](#consumption) · [Themes](#themes) · [Backup and restore](#backup-and-restore) ·
 [Troubleshooting](#troubleshooting)
 
 ## Accounts
@@ -126,6 +126,28 @@ When it cannot read the server, the bar shows `n/a` and a tooltip with the reaso
 
 ![Server metrics unavailable](screenshots/statusbar-remote-unavailable.png)
 
+### Files (SFTP)
+
+The folder button in an SSH pane header opens the **Files** drawer for that host (hosts added to Orchestra; panes opened straight
+from `~/.ssh/config` do not have it). It uses SFTP over the same `ssh.exe`, keys, vault secret and jump host as the pane.
+
+- Browse, go up, type a path, filter by name, show hidden files, refresh.
+- **Upload…** or drop files from Explorer onto the drawer; download a file to your Downloads folder (*Show in folder* afterwards).
+- New folder, rename and delete (asks first). Transfers show progress and can be cancelled.
+
+### Port forwarding
+
+When a program in an SSH pane starts listening on a port (for example a dev server printing `http://localhost:3000`), a notice
+offers **Forward**, **Open in browser** or **Ignore**. Forwarding starts an SSH tunnel to `127.0.0.1:<port>` on your PC (another
+local port if that one is busy). The ports chip in the pane header lists the tunnels: open in browser, copy the URL, **keep** it
+(start it every time you connect to that host) or stop it. A tunnel that drops reconnects on its own and keeps its local port.
+
+### When an SSH connection drops
+
+The pane is veiled with its state: reconnecting (attempt N, with the countdown), or *gave up* with the cause (login rejected, host
+key, network unreachable, refused, timeout…) and **Restart** / **Close**. When it comes back, a separator line in the terminal says
+when it reconnected and how long it was down.
+
 ## Status bar
 
 Settings → General → **Status bar**: *Show status bar*, the list of **Items** (tick to show, arrows to reorder), *Update every* (1–10 s)
@@ -181,7 +203,63 @@ Claude accounts show **5 h** and **7 d** bars with time to reset in the sidebar.
    the answer. Details: [SECURITY.md](SECURITY.md#usage-query-opt-in).
 
 Related Agents settings: *Account selection policy* (also in the sidebar via **Claude · auto**), *Warn when an account nears its 5 h
-limit*, *Resume Claude conversations on restart* and *Auto-compact when away* (experimental).
+limit*, *Resume Claude conversations on restart* and *Auto-compact when away* (experimental). Auto-compact never types over a
+prompt with unsent text; *Why it is not compacting now* shows the last decision for each running Claude agent.
+
+![Settings → Agents, auto-compact](screenshots/settings-autocompact.png)
+
+## MCP view
+
+**MCP** in the top bar opens a table with every MCP server (rows) of every account (columns): Claude user and local scopes, Codex
+and opencode. Each cell says whether the server is there, on or off, and, once tested, how many tools it offers or why it failed.
+
+- **Test all** (or a single cell) starts each server the way the agent would and lists its tools. Results are kept while Orchestra
+  stays open. The bottom row is a rough estimate of the tokens the tool definitions add to every session of that account.
+- **Add MCP**: fill the form or paste the install command or JSON from a server's README (**Read it**), pick the target accounts and
+  press **Preview**. The preview shows the exact change per account (secret values masked); **Apply** writes it.
+- When the same server has **two versions** (A/B) in different accounts, open its row to see what differs and **Make all A**.
+- **Remove** takes a server out of the chosen accounts and scopes. Cells that need something from you show the action: approve a
+  project server, turn it on, or sign in.
+- **Undo last change** restores the files as they were before the last apply.
+
+![MCP view](screenshots/mcp-view.png)
+
+## Consumption
+
+**Consumption** in the top bar shows where the tokens of Claude Code go, computed from the transcripts on this PC (nothing is sent).
+
+- Pick **Today**, **7 days** or **30 days**, and the unit: *Input-token equiv.* (one plain input token of the model that used it) or
+  *USD (estimate)* at API prices. Breakdowns by origin (reads, Bash, fixed base, skills and memory, output, thinking), session,
+  project, model and subagent.
+- **Advice** cards are sorted by estimated saving. Each one says what to do, the saving as "before → after" and the assumption it
+  makes; **Hide** dismisses one, **see its row** jumps to the data behind it.
+- The chart button in a pane header opens the same analysis for that pane's session, next to the terminal.
+- **Copy report for your AI** copies a Markdown summary (short or full) to paste into a chat. Agents can get the same report from
+  Orchestra's MCP server with the `usage_report` tool.
+
+![Consumption view](screenshots/consumption-view.png)
+
+## Pasting images and copying
+
+- **Paste an image**: with an image in the clipboard, `Ctrl+V` (or right click) in a pane pastes it. In a local pane Orchestra saves
+  it as a PNG in a cache folder (cleaned after 24 hours, up to 25 MB) and types its path; in an SSH pane it uploads it to
+  `~/.cache/orchestra-paste/` on the server and types the remote path. You can also drop image files on a pane.
+- **Copy**: `Ctrl+Shift+C`, right click with a selection, copy on select, or OSC 52 from a remote app all go through the system
+  clipboard and show a short *Copied (N)* notice, or the error if it failed. In apps that capture the mouse (Claude Code, opencode)
+  hold `Shift` while dragging to select.
+
+## Agents that need you
+
+`Ctrl+Shift+A` jumps to the next agent that is waiting for you, switching tab if needed; press it again for the next one. The
+*Need attention* block in the sidebar lists them. When an agent starts waiting and the window is not in front, Orchestra flashes
+the taskbar and, with *Notify when an agent needs permission* on (Settings → Agents), shows a Windows notification.
+
+## Updates
+
+The installed version checks the GitHub releases at startup and every 6 hours (Settings → General: turn it off or *Check now*).
+When there is a new version the top bar shows it; **Update** shows the release notes, warns if agents are working or SSH sessions
+are open, downloads the installer, checks its signature, installs it and restarts Orchestra (Claude sessions are restored). The
+portable exe only offers to open the download page. Versions 0.2.0 and 0.3.0 have no updater: install 0.4.0 by hand once.
 
 ## Themes
 

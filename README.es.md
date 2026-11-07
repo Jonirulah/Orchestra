@@ -45,6 +45,10 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
 - PTY reales (ConPTY). La salida se guarda en un búfer (2 MiB por terminal) y se reproduce al volver la ventana desde la bandeja.
 - PowerShell, cmd, Git Bash y las distribuciones de WSL se detectan automáticamente.
 - Menús contextuales (barra lateral, cuentas, fondo de la cuadrícula, barra de estado) y paleta de comandos (`Ctrl+Shift+P`).
+- **Pegar imágenes** en un terminal (`Ctrl+V` con una imagen en el portapapeles, o soltando archivos de imagen en un panel): los
+  paneles locales reciben la ruta de un PNG guardado en una carpeta de caché; en los paneles SSH la imagen se sube antes al
+  servidor. **Copiar** va por el portapapeles del sistema con aviso visible («Copiado» / error), también desde aplicaciones que usan
+  el ratón (mantén `Mayús` para seleccionar) y por OSC 52.
 
 **SSH**
 - Lista de hosts con grupos y etiquetas, importación de `~/.ssh/config`, conexión rápida (`usuario@host:puerto`), sesión `tmux`
@@ -56,7 +60,13 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
 - Gestor de claves SSH: lista las claves de `~/.ssh`, genera una clave ed25519, copia la clave pública e instálala en un servidor.
 - **Reconexión automática** con espera creciente cuando se cae una sesión ya establecida (barra con cuenta atrás, *Reconectar
   ya*, *Cancelar*) e **insignia de latencia** en la cabecera de cada panel SSH (verde / ámbar / rojo; el tooltip da última,
-  mínima, media, máxima y pérdidas). Ambas vienen activadas y todas las cifras se pueden ajustar.
+  mínima, media, máxima y pérdidas). Ambas vienen activadas y todas las cifras se pueden ajustar. Un panel SSH caído se cubre con
+  su estado (reconectando, intento N, o se rindió y por qué) y, al volver, un separador marca cuánto estuvo caído.
+- Cajón de **Archivos** (SFTP) por panel SSH: navegar, filtrar, subir (botón o soltando), descargar, crear carpetas, renombrar y
+  borrar, con progreso y cancelación. Habla SFTP por el mismo `ssh.exe`, así que claves, bóveda y hosts de salto funcionan igual.
+- **Reenvío de puertos**: cuando un programa de un panel SSH empieza a escuchar (por ejemplo un servidor de desarrollo en
+  `localhost:3000`), un aviso ofrece reenviarlo; la insignia de puertos del panel lista los túneles (abrir en el navegador, copiar
+  la URL, guardarlo para cada conexión, parar). Los túneles se reconectan solos y conservan el mismo puerto local.
 - **Métricas del servidor** opcionales en la barra de estado (CPU, RAM, disco, red y tiempo en marcha del *servidor*), leídas por una
   segunda conexión SSH pequeña; por host, desactivadas por defecto, solo servidores Linux.
 
@@ -69,11 +79,23 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
 - **Barras de uso** (ventanas de 5 horas y 7 días, tiempo hasta el reinicio) tomadas de la línea de estado de Claude Code, y una
   consulta a Anthropic **opcional** que funciona incluso sin ningún terminal abierto.
 - **Árbol de agentes activos** con estado, tareas, subagentes y tokens por sesión (hilo principal y subagentes por separado); clic
-  para enfocar el terminal. **Visor de subagentes**: un cajón de solo lectura que sigue en directo la transcripción de un subagente.
+  para enfocar el terminal. **`Ctrl+Shift+A`** salta al siguiente agente que te espera (también en otras pestañas) y la lista
+  *Necesitan atención* los enseña todos; aviso de Windows opcional cuando Orchestra no está delante. **Visor de subagentes**: un cajón de solo lectura que sigue en directo la transcripción de un subagente.
 - Política de selección de cuenta (manual, por turnos, reinicio más cercano, más cuota libre) y **autocompactado** opcional mientras
   estás ausente (escribe `/compact` en un Claude inactivo poco antes de que caduque su caché del prompt; experimental).
 - Un **servidor MCP** local permite que los agentes vean los hosts y terminales que permitas expresamente (permiso por host,
   registro de auditoría). El acceso por host es `read` (los agentes leen terminales), `ask` (también pueden ejecutar un comando con `run_command`, pero solo tras aprobar tú ese comando exacto en un diálogo) o `full` (ejecutan comandos sin preguntar). Cada intento queda auditado.
+- **Vista MCP** (barra superior → **MCP**): todos los servidores MCP de todas las cuentas en una tabla (ámbitos usuario y local de
+  Claude, Codex, opencode). Pruébalos (herramientas encontradas, o por qué no), instala uno en varias cuentas a la vez desde un
+  formulario o pegando el comando de un README, compara lado a lado cuando el mismo servidor tiene dos versiones e iguala las demás
+  a una, quítalo, y apruébalo, enciéndelo o inicia sesión donde la cuenta lo pida. Cada cambio enseña antes la edición exacta y se
+  puede deshacer. Cada servidor muestra cuántos tokens, aproximadamente, añaden sus herramientas a cada sesión.
+- **Vista Consumo** (barra superior → **Consumo**): adónde van los tokens de Claude Code, leído de las transcripciones locales (no
+  se envía nada). Por periodo (hoy, 7 o 30 días), sesión, proyecto, modelo y subagente, en equivalentes de token de entrada o en
+  USD estimados a precios de la API; un cajón por panel muestra la sesión actual. Las tarjetas de **consejos** señalan los mayores
+  derroches (ficheros leídos enteros una y otra vez, cachés que caducan en las pausas, una base fija pesada…) con el ahorro como
+  «antes → después» y la suposición que hay detrás. **Copiar informe para tu IA** da un resumen en Markdown para pegar en un chat, y
+  el servidor MCP ofrece el mismo informe como herramienta `usage_report`.
 
 **Barra de estado**
 - Una barra fina abajo: nombre del equipo, CPU, RAM, lectura/escritura de disco, red de bajada/subida, tiempo encendido, agentes
@@ -101,7 +123,9 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
 |---|---|
 | ![Barra lateral con las cuentas agrupadas por proveedor](docs/screenshots/sidebar-accounts.png)<br>Cuentas agrupadas por proveedor, con barras de uso | ![Cajón del visor de subagentes](docs/screenshots/subagent-drawer.png)<br>Visor de subagentes: transcripción en directo, solo lectura |
 | ![Barra de estado de una pestaña SSH](docs/screenshots/statusbar-ssh.png)<br>Barra de estado de una pestaña SSH con las métricas del servidor | ![Ajustes del terminal](docs/screenshots/settings-terminal.png)<br>Ajustes → Terminal |
-| ![Copia de seguridad en Ajustes → Datos](docs/screenshots/settings-data-backup.png)<br>Ajustes → Datos: copia de seguridad completa | |
+| ![Copia de seguridad en Ajustes → Datos](docs/screenshots/settings-data-backup.png)<br>Ajustes → Datos: copia de seguridad completa | ![Ajustes → Agentes, autocompactado](docs/screenshots/settings-autocompact.png)<br>Ajustes → Agentes: autocompactado en ausencia, y por qué no actúa ahora |
+| ![Vista MCP con los servidores probados](docs/screenshots/mcp-view.png)<br>Vista MCP: todos los servidores de todas las cuentas, probados, con dos versiones de uno | ![Instalar un servidor MCP en varias cuentas](docs/screenshots/mcp-install-preview.png)<br>Instalar un servidor en tres cuentas: el cambio exacto, antes de aplicarlo |
+| ![Vista Consumo, últimos 7 días](docs/screenshots/consumption-view.png)<br>Consumo de los últimos 7 días: adónde van los tokens y consejos con el ahorro | ![Cajón de consumo de la sesión junto al terminal](docs/screenshots/consumption-session.png)<br>Consumo de una sesión, junto a su terminal |
 
 Las capturas están en inglés (la interfaz base).
 
@@ -258,7 +282,7 @@ Orchestra 0.3.0 (la 0.1.0 fue la primera versión pública) es un proyecto de un
 - **El instalador no se ha probado instalándolo** en un equipo limpio, y **la CI nunca se ha ejecutado** (el flujo existe pero aún
   no se ha lanzado en GitHub).
 - **Solo Windows.** No hay versión para macOS ni Linux.
-- **No incluido**: SFTP / transferencia de archivos, teclear en terminales por MCP y transferencia de archivos (solo existe `run_command`), túneles, snippets y difusión,
+- **No incluido**: teclear en terminales por MCP y transferencia de archivos por MCP (solo existe `run_command`), snippets y difusión,
   barras de uso para Codex / opencode. Los paneles SSH no muestran la etiqueta de git; las métricas remotas son solo para Linux; las
   sesiones de Codex / opencode solo se detectan por el nombre del proceso (sin tokens ni datos de sesión).
 - Los comentarios del código, `docs/DISENO.md` y los archivos de `docs/dev-notes/` están en gran parte en español.

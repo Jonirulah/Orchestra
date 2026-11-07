@@ -10,7 +10,7 @@ import { parseTheme } from './themeimport.ts';
 const MINE = /^(settings\.(terminal|agents|dialog|accounts|data)|shortcuts|themeimport)\./;
 // Textos que son iguales en inglés y en español a propósito (nombres propios, palabras idénticas, plantillas).
 const SAME = new Set([
-  'settings.dialog.tabGeneral', 'settings.dialog.tabTerminal', 'settings.dialog.tabMcp',
+  'settings.dialog.tabGeneral', 'settings.dialog.tabTerminal',
   'settings.terminal.cursorLabel', 'settings.terminal.fileError', 'settings.agents.experimental',
   'settings.agents.compactLogLine', 'settings.data.build', 'settings.accounts.colorAria',
   'settings.accounts.sortManual', // «Manual» se escribe igual

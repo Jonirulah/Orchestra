@@ -27,6 +27,16 @@
     confirming = false;
     app.setting('usageQuery', true);
   }
+
+  // Auto-compact: último motivo de cada agente Claude en marcha, en palabras.
+  const claudeAgents = $derived(app.agents.filter((a) => a.agent === 'claude'));
+  function compactWhy(a: (typeof app.agents)[number]): string {
+    const r = app.compactReasons[a.paneId] ?? (s.autoCompact ? 'needs-idle-check' : 'disabled');
+    const dev = app.compactDev;
+    const mins = a.lastRequestAt ? Math.max(0, Math.floor((Date.now() / 1000 - a.lastRequestAt) / 60)) : 0;
+    const from = Math.round((dev?.afterMin ?? s.autoCompactAfterMin) * 10) / 10;
+    return tk(`settings.agents.reason.${r.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase())}`, { k: Math.round(a.ctxTokens / 1000), min: dev?.ctxK ?? s.autoCompactCtxK, mins, from });
+  }
 </script>
 
 <div class="s-row stack">
@@ -181,6 +191,30 @@
 
 <div class="s-row stack">
   <div class="lbl">
+    <b>{t('settings.agents.howLabel')}</b>
+    <small>{t('settings.agents.howBody')}</small>
+    {#if app.compactDev}<small class="dev-ov">{t('settings.agents.devOverride', { v: JSON.stringify(app.compactDev) })}</small>{/if}
+  </div>
+</div>
+
+<div class="s-row stack">
+  <div class="lbl">
+    <b>{t('settings.agents.statusLabel')}</b>
+    <small>{t('settings.agents.statusHint')}</small>
+  </div>
+  {#if claudeAgents.length}
+    <ul class="hint compact-log">
+      {#each claudeAgents as a (a.paneId)}
+        <li><b>{app.paneById(a.paneId)?.title ?? a.title ?? a.paneId}</b>: {compactWhy(a)}</li>
+      {/each}
+    </ul>
+  {:else}
+    <span class="hint">{t('settings.agents.statusEmpty')}</span>
+  {/if}
+</div>
+
+<div class="s-row stack">
+  <div class="lbl">
     <b>{t('settings.agents.recentLabel')}</b>
     <small>{t('settings.agents.recentHint')}</small>
   </div>
@@ -199,5 +233,6 @@
   .snd select { width: 200px; }
   .compact-log { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
   .uq-acts { display: flex; gap: 8px; }
+  .dev-ov { color: var(--warn, #d9a441); }
   .uq-head { margin: 18px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 </style>

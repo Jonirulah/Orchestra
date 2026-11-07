@@ -2,6 +2,8 @@ import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { UsageResult } from './usageQuery.ts';
 import { demoHistory, type HistPoint } from './history.ts';
+import { demoAccounts, demoMcpBase, demoMcpDef, demoQuery, DEMO_CODEX_DEFAULT } from './demodata.ts';
+import { demoScanReport, demoSessionReport, demoAdvice, demoReport } from './consumodemo.ts';
 
 export const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -258,25 +260,28 @@ export async function systemIdleSeconds(): Promise<number> {
   if (!inTauri) return 0;
   return invoke<number>('system_idle_seconds');
 }
+/** Solo desarrollo: valor de `ORCHESTRA_DEV_AUTOCOMPACT` (null = sin variable). */
+export async function devAutocompactOverride(): Promise<string | null> {
+  if (!inTauri) return null;
+  return invoke<string | null>('dev_autocompact_override');
+}
+/** Solo desarrollo: línea en `autocompact-dev.log` (el backend no hace nada sin la variable). */
+export function devAutocompactLog(line: string): void {
+  if (inTauri) void invoke('dev_autocompact_log', { line }).catch(() => {});
+}
 
 export interface ClaudeProfile {
   dir: string; isDefault: boolean; loggedIn: boolean;
   email?: string; plan?: string; org?: string; accountUuid?: string;
 }
 export async function claudeProfiles(): Promise<ClaudeProfile[]> {
-  if (!inTauri) return [
-    { dir: 'C:/Users/demo/.claude', isDefault: true, loggedIn: true, email: 'me@example.com', plan: 'Max 20x' },
-    { dir: 'C:/Users/demo/.claude-b', isDefault: false, loggedIn: true, email: 'work@example.com', plan: 'Pro' },
-  ];
+  if (!inTauri) return demoAccounts().filter((a) => a.provider === 'claude').map((a) => ({ dir: a.dir, isDefault: a.isDefault, loggedIn: true, email: a.email, plan: a.plan }));
   return invoke('claude_profiles');
 }
 /** Solo modo demo (navegador): cuentas de Codex y opencode inventadas para ver la barra lateral agrupada por proveedor. En la app real, vacío. */
 export function demoProviderAccounts(): { name: string; dir: string; provider: 'codex' | 'opencode'; color: string }[] {
   if (inTauri) return [];
-  return [
-    { name: 'Work', dir: 'C:/Users/demo/.codex-work', provider: 'codex', color: '#10a37f' },
-    { name: 'Side', dir: 'C:/Users/demo/.opencode-side', provider: 'opencode', color: '#c58af9' },
-  ];
+  return demoAccounts().flatMap((a) => (a.provider !== 'claude' && a.name && a.color ? [{ name: a.name, dir: a.dir, provider: a.provider, color: a.color }] : []));
 }
 /** Límites de uso (5 h / 7 d) que el envoltorio de statusline guardó para una cuenta. */
 export interface QuotaEntry {
@@ -369,7 +374,7 @@ export interface ProviderDetect {
   opencodeInstalled: boolean; opencodeDir?: string;
 }
 export async function providerDetect(): Promise<ProviderDetect> {
-  if (!inTauri) return { codexInstalled: true, codexDir: 'C:/Users/demo/.codex', opencodeInstalled: true, opencodeDir: 'C:/Users/demo/.local/share/opencode' };
+  if (!inTauri) return { codexInstalled: !demoQuery()?.has('mcpnone'), codexDir: DEMO_CODEX_DEFAULT, opencodeInstalled: true, opencodeDir: 'C:/Users/demo/.local/share/opencode' };
   return invoke<ProviderDetect>('provider_detect');
 }
 /** Crea la carpeta de una cuenta de Codex u opencode (solo dentro de tu carpeta de usuario y con el prefijo esperado).
@@ -386,6 +391,302 @@ export interface ProviderStatus { status: ProviderLoginStatus; /** chatgpt | api
 export async function providerStatus(provider: 'codex' | 'opencode', dir: string, isDefault: boolean): Promise<ProviderStatus> {
   if (!inTauri) return { status: provider === 'codex' ? 'signedIn' : 'notSignedIn', method: provider === 'codex' ? 'chatgpt' : undefined, count: provider === 'opencode' ? 0 : undefined };
   return invoke<ProviderStatus>('provider_status', { provider, dir, isDefault });
+}
+
+// ---------- gestor de MCP por cuenta (mcp_manager.rs: lectura; mcp_manager/write.rs: escritura) ----------
+/** Un MCP configurado en una cuenta. Los valores de env/cabeceras nunca llegan aquí: solo sus nombres (se pintan como `•••`). */
+export interface McpDef {
+  name: string;
+  transport: 'stdio' | 'http' | 'sse';
+  command: string | null;
+  /** Argumentos con los que parecen claves ya cambiados por `•••`. */
+  args: string[];
+  /** URL con los valores de la query y la contraseña cambiados por `•••`. */
+  url: string | null;
+  cwd: string | null;
+  envKeys: string[];
+  headerKeys: string[];
+  /** Variables que la herramienta toma de su entorno (Codex `env_vars`, `bearer_token_env_var`). */
+  envPassthrough: string[];
+  /** `null`: la herramienta no dice nada (en `.mcp.json`: Claude aún no ha preguntado si se aprueba). */
+  enabled: boolean | null;
+  /** `plugin` y `claudeai` = gestionados fuera de la config de la cuenta (solo se muestran). */
+  scope: 'user' | 'local' | 'project' | 'global' | 'plugin' | 'claudeai';
+  projectPath: string | null;
+  rawKind: string;
+  /** Codex: `auth_status` de `codex mcp list`. */
+  authStatus: string | null;
+  /** Proyectos en los que Claude lo tiene apagado (`disabledMcpServers`) aunque esté definido arriba. */
+  disabledIn: string[];
+  /** `plugin:<id>` | `claude.ai` | null. */
+  managedBy: string | null;
+  /** Misma huella = misma definición (válida mientras Orchestra sigue abierto). */
+  fingerprint: string;
+}
+export interface McpAccount {
+  /** `claude:<dir>` | `codex:<dir>` | `opencode:global` */
+  id: string;
+  provider: 'claude' | 'codex' | 'opencode';
+  dir: string;
+  isDefault: boolean;
+  label: string | null;
+  source: string;
+  servers: McpDef[];
+  /** Fallo de esta cuenta; las demás se listan igual. */
+  error: string | null;
+}
+export type McpProbeResult =
+  /** `toolsBytes`: JSON compacto de las definiciones de `tools/list`; `tokensEst` ≈ toolsBytes / 4 (lo que cuestan en cada sesión). */
+  | { status: 'ok'; tools: number; serverName: string | null; version: string | null; toolsBytes: number; tokensEst: number }
+  | { status: 'needsAuth' }
+  | { status: 'failed'; msg: string }
+  | { status: 'timeout' };
+/** `projects`: carpetas de los paneles abiertos (para leer su `.mcp.json`). */
+export async function mcpmList(projects: string[] = []): Promise<McpAccount[]> {
+  if (!inTauri) return demoMcpAccounts();
+  return invoke<McpAccount[]>('mcpm_list', { projects });
+}
+/** Firma barata (mtime + tamaño) de los ficheros que lee `mcpmList`: si cambia, toca volver a listar. */
+export async function mcpmStamp(projects: string[] = []): Promise<string> {
+  if (!inTauri) return 'demo';
+  return invoke<string>('mcpm_stamp', { projects });
+}
+export async function mcpmProbe(accountId: string, scope: McpDef['scope'], name: string, projectPath?: string | null): Promise<McpProbeResult> {
+  if (!inTauri) return demoMcpProbe(accountId, name);
+  return invoke<McpProbeResult>('mcpm_probe', { accountId, scope, name, projectPath: projectPath ?? null });
+}
+
+// --- F2: escribir (mcp_manager/write.rs). Nada se ejecuta sin `mcpmApply`, que la interfaz solo llama tras la vista previa. ---
+export interface McpKvInput { key: string; value: string }
+/** Definición del formulario. Los valores van a Rust una vez (para escribirlos); nunca vuelven. */
+export interface McpDefInput {
+  name: string;
+  transport: 'stdio' | 'http' | 'sse';
+  command: string | null;
+  args: string[];
+  url: string | null;
+  env: McpKvInput[];
+  headers: McpKvInput[];
+  bearerEnvVar: string | null;
+  /** Claude: `user` (toda la cuenta), `local` (solo tú, en `projectPath`) o `project` (`.mcp.json` de `projectPath`).
+   *  Codex y opencode solo tienen ámbito global: con otro, la vista previa lo dice y ese paso no se aplica. */
+  scope?: 'user' | 'local' | 'project';
+  projectPath?: string | null;
+}
+export interface McpSourceRef { accountId: string; scope: McpDef['scope']; name: string; projectPath: string | null }
+export type McpChange =
+  | { kind: 'add'; def: McpDefInput; targets: string[]; replace: boolean }
+  /** «Aplicar a…» (replace false) e «Igualar a esta» (true): Rust lee la definición (con sus valores) de la cuenta origen. */
+  | { kind: 'copy'; from: McpSourceRef; targets: string[]; replace: boolean; includeLocal?: boolean }
+  /** `includeLocal`: Claude, también las copias del ámbito local de cada proyecto (`claude mcp remove --scope local` en esa carpeta). */
+  | { kind: 'remove'; name: string; targets: string[]; includeLocal?: boolean }
+  /** Aprobar un MCP de `.mcp.json` (Claude): `enabledMcpjsonServers` de `<proyecto>\.claude\settings.local.json`. */
+  | { kind: 'approve'; accountId: string; name: string; projectPath: string }
+  /** Encender / apagar: Claude `projects[carpeta].disabledMcpServers` de `.claude.json`; opencode `enabled`. */
+  | { kind: 'setEnabled'; accountId: string; name: string; scope: McpDef['scope']; projectPath: string | null; on: boolean };
+export interface McpPlanStep {
+  accountId: string;
+  provider: McpAccount['provider'];
+  action: 'add' | 'replace' | 'remove' | 'skip' | 'state';
+  /** Fichero que la herramienta va a modificar (se copia antes). */
+  file: string;
+  /** Comando exacto por cuenta (secretos como •••) o cambio de fichero (opencode). */
+  lines: string[];
+  /** No se puede hacer en esta cuenta (y por qué); no se aplica nada de este paso. */
+  blocked: string | null;
+  note: string | null;
+}
+export interface McpStepResult { accountId: string; status: 'ok' | 'failed' | 'skipped'; msg: string; verified: boolean | null }
+export interface McpApplyResult { steps: McpStepResult[]; undoId: number | null }
+export interface McpUndoInfo { id: number; summary: string; files: string[] }
+
+export async function mcpmPlan(change: McpChange): Promise<McpPlanStep[]> {
+  if (!inTauri) return demoMcpPlan(change);
+  return invoke<McpPlanStep[]>('mcpm_plan', { change });
+}
+export async function mcpmApply(change: McpChange): Promise<McpApplyResult> {
+  if (!inTauri) return demoMcpApply(change);
+  return invoke<McpApplyResult>('mcpm_apply', { change });
+}
+export async function mcpmUndoInfo(): Promise<McpUndoInfo | null> {
+  if (!inTauri) return demoUndo;
+  return invoke<McpUndoInfo | null>('mcpm_undo_info');
+}
+export async function mcpmUndo(): Promise<McpUndoInfo> {
+  if (!inTauri) {
+    const u = demoUndo;
+    if (!u) throw new Error('Nothing to undo');
+    demoUndo = null;
+    // Como la copia de Rust: vuelve al estado de antes del cambio.
+    if (demoUndoSnap) {
+      demoEdits.clear();
+      for (const [k, m] of demoUndoSnap.edits) demoEdits.set(k, new Map(m));
+      demoLocalGone.clear();
+      for (const k of demoUndoSnap.gone) demoLocalGone.add(k);
+      demoState.clear();
+      for (const [k, v] of demoUndoSnap.state) demoState.set(k, v);
+      demoUndoSnap = null;
+    }
+    return u;
+  }
+  return invoke<McpUndoInfo>('mcpm_undo');
+}
+
+// Demo de la escritura: imita lo que devuelve Rust (mismas formas de comando), sin tocar nada.
+let demoUndo: McpUndoInfo | null = null;
+/** Cambios aplicados en modo demo (para que el listado posterior los refleje): cuenta → nombre → añadido (def) o quitado (null). */
+const demoEdits = new Map<string, Map<string, McpDef | null>>();
+/** Copias del ámbito local quitadas en la demo (`includeLocal`): `cuenta|nombre|carpeta`. */
+const demoLocalGone = new Set<string>();
+let demoUndoSnap: { edits: [string, Map<string, McpDef | null>][]; gone: string[]; state: [string, boolean][] } | null = null;
+const demoLocalKey = (accountId: string, name: string, path: string | null) => `${accountId}|${name}|${(path ?? '').replace(/\\/g, '/')}`;
+const demoWin = (p: string) => p.replace(/\//g, '\\');
+/** «Abrir fichero»: el fichero de configuración de esa cuenta en el Explorador. */
+export async function mcpmReveal(accountId: string): Promise<void> {
+  if (inTauri) await invoke('mcpm_reveal', { accountId });
+}
+function demoQuote(a: string): string {
+  return /^[A-Za-z0-9_./:=\\@,+%•-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`;
+}
+const changeName = (c: McpChange) => (c.kind === 'add' ? c.def.name : c.kind === 'copy' ? c.from.name : c.name);
+/** Estado encendido/aprobado puesto en la demo: `cuenta|nombre|ámbito|carpeta` → enabled. */
+const demoState = new Map<string, boolean>();
+const demoStateKey = (accountId: string, name: string, scope: string, path: string | null) => `${accountId}|${name}|${scope}|${(path ?? '').replace(/\\/g, '/')}`;
+/** Demo de Aprobar / Encender / Apagar: las mismas líneas que Rust (ruta de claves = valor). */
+function demoStatePlan(change: Extract<McpChange, { kind: 'approve' | 'setEnabled' }>): McpPlanStep[] {
+  const a = demoMcpAccounts().find((x) => x.id === change.accountId);
+  if (!a) throw new Error('Unknown account');
+  const name = change.name;
+  const proj = change.projectPath;
+  const projectFile = (p: string) => `${demoWin(p)}\\.claude\\settings.local.json`;
+  const claudeFile = a.isDefault ? 'C:\\Users\\demo\\.claude.json' : `${demoWin(a.dir)}\\.claude.json`;
+  const base: McpPlanStep = { accountId: a.id, provider: a.provider, action: 'state', file: '', lines: [], blocked: null, note: null };
+  const on = change.kind === 'approve' ? true : change.on;
+  if (a.provider === 'codex') return [{ ...base, file: `${demoWin(a.dir)}\\config.toml`, blocked: `Codex has no command to turn a server on or off: change \`enabled\` under [mcp_servers.${name}] in ${demoWin(a.dir)}\\config.toml` }];
+  if (a.provider === 'opencode') return [{ ...base, file: `${demoWin(a.dir)}\\opencode.json`, lines: [`["mcp"]["${name}"]["enabled"] = ${on}`] }];
+  if (change.kind === 'approve' || change.scope === 'project') return [{ ...base, file: projectFile(proj ?? ''), lines: on ? [`["enabledMcpjsonServers"] = ["${name}"]`] : [`["disabledMcpjsonServers"] = ["${name}"]`] }];
+  return [{ ...base, file: claudeFile, lines: [`["projects"]["${(proj ?? '').replace(/\\/g, '/')}"]["disabledMcpServers"] = ${on ? '[]' : `["${name}"]`}`] }];
+}
+function demoMcpPlan(change: McpChange): McpPlanStep[] {
+  if (change.kind === 'approve' || change.kind === 'setEnabled') return demoStatePlan(change);
+  const accs = demoMcpAccounts();
+  const name = changeName(change);
+  // Copiar / igualar: la definición de la cuenta origen (como hace Rust), no una inventada.
+  const src = change.kind === 'copy' ? accs.find((a) => a.id === change.from.accountId)?.servers.find((d) => d.name === name && d.scope === change.from.scope && (d.projectPath ?? null) === (change.from.projectPath ?? null)) : undefined;
+  const def: McpDefInput = change.kind === 'add' ? change.def
+    : { name, transport: src?.transport ?? 'stdio', command: src?.command ?? 'npx', args: src?.args ?? [], url: src?.url ?? null, env: (src?.envKeys ?? []).map((key) => ({ key, value: 'x' })), headers: (src?.headerKeys ?? []).map((key) => ({ key, value: 'x' })), bearerEnvVar: null };
+  return change.targets.map((id): McpPlanStep => {
+    const a = accs.find((x) => x.id === id)!;
+    const cur = a.servers.find((d) => d.name === name && (d.scope === 'user' || d.scope === 'global'));
+    const has = !!cur;
+    const alsoLocal = a.provider === 'claude' && a.servers.some((d) => d.name === name && d.scope === 'local');
+    const envPre = a.provider === 'claude' && !a.isDefault ? `CLAUDE_CONFIG_DIR=${demoWin(a.dir)} ` : a.provider === 'codex' ? `CODEX_HOME=${demoWin(a.dir)} ` : '';
+    const file = a.provider === 'claude' ? (a.isDefault ? 'C:\\Users\\demo\\.claude.json' : `${demoWin(a.dir)}\\.claude.json`) : a.provider === 'codex' ? `${demoWin(a.dir)}\\config.toml` : `${demoWin(a.dir)}\\opencode.json`;
+    const base: McpPlanStep = { accountId: id, provider: a.provider, action: 'add', file, lines: [], blocked: null, note: null };
+    const locals = a.provider === 'claude' ? a.servers.filter((d) => d.name === name && d.scope === 'local' && d.projectPath) : [];
+    const localLines = (ls: McpDef[]) => ls.map((d) => `cd ${demoQuote(d.projectPath ?? '')} && ${envPre}claude mcp remove ${name} --scope local`);
+    if (change.kind === 'remove') {
+      const inc = !!change.includeLocal && locals.length > 0;
+      if (!has) return inc ? { ...base, action: 'remove', lines: localLines(locals), note: 'Only in the local scope of its projects: removes those' } : { ...base, action: 'skip', note: 'Not in this account' };
+      const lines = a.provider === 'claude' ? [`${envPre}claude mcp remove ${name} --scope user`] : a.provider === 'codex' ? [`${envPre}codex mcp remove ${name}`] : [`opencode.json: remove mcp.${name}`];
+      if (inc) return { ...base, action: 'remove', lines: [...lines, ...localLines(locals)], note: 'Also removes the copies in the local scope of its projects' };
+      return { ...base, action: 'remove', lines, note: alsoLocal ? 'Also in the local scope of a project: that one stays' : null };
+    }
+    const otherLocals = change.kind === 'copy' && change.replace && change.includeLocal && src ? locals.filter((d) => d.fingerprint !== src.fingerprint) : [];
+    const scope = change.kind === 'add' ? (change.def.scope ?? 'user') : 'user';
+    if (scope !== 'user') {
+      if (a.provider !== 'claude') return { ...base, blocked: `Only Claude Code has a ${scope} scope; ${a.provider === 'codex' ? 'Codex' : 'opencode'} only has a global one` };
+      const proj = demoWin((change.kind === 'add' && change.def.projectPath) || '');
+      const j = def.transport === 'stdio' ? { args: def.args, command: def.command, ...(def.env.length ? { env: Object.fromEntries(def.env.map((e) => [e.key, '•••'])) } : {}), type: 'stdio' } : { type: def.transport, url: def.url };
+      return { ...base, file: scope === 'project' ? `${proj}\\.mcp.json` : file, lines: [`cd ${demoQuote(proj)} && ${envPre}claude mcp add-json ${name} '${JSON.stringify(j)}' --scope ${scope}`] };
+    }
+    if (src && cur && cur.fingerprint === src.fingerprint && a.provider !== 'codex') {
+      return otherLocals.length ? { ...base, action: 'remove', lines: localLines(otherLocals), note: 'Already there with the same definition; removes the local-scope copies that differ' } : { ...base, action: 'skip', note: 'Already there with the same definition' };
+    }
+    const replace = change.replace && has;
+    if (has && !change.replace) return { ...base, blocked: 'An MCP with this name already exists in this account' };
+    const env = Object.fromEntries(def.env.map((e) => [e.key, '•••']));
+    const headers: Record<string, string> = Object.fromEntries(def.headers.map((h) => [h.key, '•••']));
+    if (a.provider === 'codex' && def.headers.length) {
+      return { ...base, blocked: `Codex CLI cannot set HTTP headers (${def.headers[0].key}); use a bearer-token variable or add it by hand in config.toml` };
+    }
+    let lines: string[];
+    if (a.provider === 'claude') {
+      if (def.bearerEnvVar) headers.Authorization = `Bearer \${${def.bearerEnvVar}}`;
+      const j = def.transport === 'stdio'
+        ? { args: def.args, command: def.command, ...(def.env.length ? { env } : {}), type: 'stdio' }
+        : { ...(Object.keys(headers).length ? { headers } : {}), type: def.transport, url: def.url };
+      lines = [...(replace ? [`${envPre}claude mcp remove ${name} --scope user`] : []), `${envPre}claude mcp add-json ${name} '${JSON.stringify(j)}' --scope user`, ...localLines(otherLocals)];
+    } else if (a.provider === 'codex') {
+      lines = [def.transport === 'stdio'
+        ? `${envPre}codex mcp add ${name} ${def.env.map((e) => `--env ${e.key}=•••`).join(' ')}${def.env.length ? ' ' : ''}-- ${[def.command ?? '', ...def.args].map(demoQuote).join(' ')}`
+        : `${envPre}codex mcp add ${name} --url ${def.url}${def.bearerEnvVar ? ` --bearer-token-env-var ${def.bearerEnvVar}` : ''}`];
+    } else {
+      if (def.bearerEnvVar) headers.Authorization = `Bearer {env:${def.bearerEnvVar}}`;
+      const v = def.transport === 'stdio'
+        ? { command: [def.command, ...def.args], enabled: true, ...(def.env.length ? { environment: env } : {}), type: 'local' }
+        : { enabled: true, ...(Object.keys(headers).length ? { headers } : {}), type: 'remote', url: def.url };
+      lines = [`opencode.json: mcp.${name} = ${JSON.stringify(v)}`];
+    }
+    return { ...base, action: replace ? 'replace' : 'add', lines };
+  });
+}
+async function demoMcpApply(change: McpChange): Promise<McpApplyResult> {
+  await new Promise((r) => setTimeout(r, 1200));
+  const name = changeName(change);
+  const plan = demoMcpPlan(change);
+  const snap = { edits: [...demoEdits].map(([k, m]) => [k, new Map(m)] as [string, Map<string, McpDef | null>]), gone: [...demoLocalGone], state: [...demoState] };
+  if (change.kind === 'approve' || change.kind === 'setEnabled') {
+    const ok = plan.filter((s) => !s.blocked);
+    const scope = change.kind === 'approve' ? 'project' : change.scope;
+    const on = change.kind === 'approve' ? true : change.on;
+    if (ok.length) demoState.set(demoStateKey(change.accountId, change.name, scope, change.projectPath), on);
+    const files = ok.map((s) => s.file);
+    if (files.length) { demoUndo = { id: Date.now(), summary: `${change.kind === 'approve' ? 'approve' : on ? 'turn on' : 'turn off'} ${change.name}`, files }; demoUndoSnap = snap; }
+    return { steps: plan.map((s) => (s.blocked ? { accountId: s.accountId, status: 'skipped', msg: s.blocked, verified: null } : { accountId: s.accountId, status: 'ok', msg: 'written', verified: true })), undoId: files.length ? demoUndo!.id : null };
+  }
+  const steps = plan.map((s): McpStepResult => {
+    if (s.blocked) return { accountId: s.accountId, status: 'skipped', msg: s.blocked, verified: null };
+    if (s.action === 'skip') return { accountId: s.accountId, status: 'skipped', msg: s.note ?? '', verified: null };
+    // Capturas: un fallo de escritura en Codex para ver el resultado parcial.
+    if (s.provider === 'codex' && name === 'brave-search') return { accountId: s.accountId, status: 'failed', msg: 'Error: failed to write C:\\Users\\demo\\.codex-work\\config.toml: Access is denied. (os error 5)', verified: null }; // i18n-ignore: demo data
+    const msg = s.provider === 'claude' ? (s.action === 'remove' ? `Removed MCP server ${name} from user config` : `Added stdio MCP server ${name} to user config`)
+      : s.provider === 'codex' ? (s.action === 'remove' ? `Removed global MCP server '${name}'.` : `Added global MCP server '${name}'.`) : 'written';
+    for (const l of s.lines) {
+      const lm = l.match(/^cd (.+?) && .*--scope local$/);
+      if (lm) demoLocalGone.add(demoLocalKey(s.accountId, name, lm[1].replace(/^'|'$/g, '')));
+    }
+    if (s.lines.every((l) => l.endsWith('--scope local'))) return { accountId: s.accountId, status: 'ok', msg: `Removed MCP server ${name} from local config`, verified: true };
+    const m = demoEdits.get(s.accountId) ?? new Map<string, McpDef | null>();
+    m.set(name, s.action === 'remove' ? null : demoMcpDef(name, 'demo' + name, { scope: s.provider === 'opencode' ? 'global' : 'user' }));
+    demoEdits.set(s.accountId, m);
+    return { accountId: s.accountId, status: 'ok', msg, verified: true };
+  });
+  const files = plan.filter((s) => !s.blocked && s.action !== 'skip').map((s) => s.file);
+  if (files.length) { demoUndo = { id: Date.now(), summary: `${change.kind} ${name}`, files }; demoUndoSnap = snap; }
+  return { steps, undoId: files.length ? demoUndo!.id : null };
+}
+
+function demoMcpAccounts(): McpAccount[] {
+  const list = demoMcpBase();
+  for (const a of list) {
+    for (const [name, d] of demoEdits.get(a.id) ?? []) {
+      a.servers = a.servers.filter((x) => !(x.name === name && (x.scope === 'user' || x.scope === 'global')));
+      if (d) a.servers.push(d);
+    }
+    a.servers = a.servers.filter((x) => x.scope !== 'local' || !demoLocalGone.has(demoLocalKey(a.id, x.name, x.projectPath)));
+    a.servers = a.servers.map((x) => { const k = demoStateKey(a.id, x.name, x.scope, x.projectPath); return demoState.has(k) ? { ...x, enabled: demoState.get(k)! } : x; });
+  }
+  return list;
+}
+async function demoMcpProbe(accountId: string, name: string): Promise<McpProbeResult> {
+  await new Promise((r) => setTimeout(r, accountId.startsWith('codex:') ? 2200 : 900));
+  if (name === 'linear' && !demoQuery()?.has('mcpauth')) return { status: 'needsAuth' };
+  if (name === 'playwright' && accountId.startsWith('codex:')) return { status: 'timeout' };
+  if (name === 'postgres') return { status: 'failed', msg: 'the server exited before answering initialize (exit code 1). stderr: error: Failed to spawn: `mcp-server-postgres` Caused by: could not connect to server: Connection refused (os error 10061). Is the server running on host "127.0.0.1" and accepting TCP/IP connections on port 5432?' }; // i18n-ignore: demo data
+  const tools: Record<string, [number, number]> = { github: [26, 47_200], filesystem: [14, 9_800], playwright: [21, 28_400], sentry: [18, 21_600], unity: [9, 6_100] };
+  const [n, bytes] = tools[name] ?? [3, 1_200];
+  return { status: 'ok', tools: n, serverName: name, version: '1.0.0', toolsBytes: bytes, tokensEst: Math.ceil(bytes / 4) };
 }
 
 export interface AgentTodo { content: string; status: string; activeForm?: string }
@@ -416,7 +717,7 @@ export async function agentScan(ids: string[], dirs: string[]): Promise<AgentInf
   const waitIdx = new Set((demoParam('waiting') ?? '1').split(',').filter((x) => x.trim() !== '').map(Number));
   return ids.slice(0, nAgents).map((id, i): AgentInfo => ({
     paneId: id, agent: 'claude', pid: 1000 + i, status: waitIdx.has(i) ? 'waiting' : 'busy',
-    title: i === 0 ? 'Maps -3-4-5-6' : i === 1 ? 'SSH terminal manager' : `Demo agent ${i + 1}`, cwd: i === 0 ? 'C:/Users/demo/code/maps' : 'C:/Users/demo', ctxTokens: i === 0 ? 289000 : 121000,
+    title: i === 0 ? 'Map editor' : i === 1 ? 'SSH terminal manager' : `Demo agent ${i + 1}`, cwd: i === 0 ? 'C:/Users/demo/code/maps' : 'C:/Users/demo', ctxTokens: i === 0 ? 289000 : 121000,
     current: i === 0 ? 'Bash: cargo test --release' : undefined, lastRequestAt: now - (i === 0 ? 120 : 3300), cacheTtl: 3600,
     configDir: i === 0 ? 'C:/Users/demo/.claude' : 'C:/Users/demo/.claude-b',
     model: i === 0 ? 'claude-opus-5-5' : 'claude-sonnet-5-5', startedAt: now - (i === 0 ? 2 * 3600 + 840 : 3 * 3600 + 20 * 60),
@@ -645,3 +946,149 @@ export async function onFileDrop(cb: (pane: string, paths: string[]) => void): P
   if (!inTauri) return () => {};
   return listen<{ pane: string; paths: string[] }>('orchestra-file-drop', (e) => cb(e.payload.pane, e.payload.paths));
 }
+// ── Consumo (consumo.rs): a qué se van los tokens. Tipos en camelCase como los serializa Rust. ──
+export type ConsumoCat = 'base' | 'read' | 'bash' | 'search' | 'mcp' | 'image' | 'subagent' | 'reminder'
+  | 'user' | 'compact' | 'otherTool' | 'output' | 'thinking' | 'unattributed';
+export interface ConsumoUsage { input: number; cacheCreate: number; cache5m: number; cache1h: number; cacheRead: number; output: number; thinking: number }
+/** `eq`: coste real en tokens de entrada equivalentes; `usd`: el mismo a precio de API (solo para comparar modelos). */
+export interface ConsumoCatAgg { cat: ConsumoCat; count: number; t: number; eq: number; usd: number }
+export interface ConsumoTopBlock {
+  cat: ConsumoCat; tool?: string; detail?: string; req: number; ts: number; t: number; eq: number; usd: number;
+  /** Fórmula comprobable: eq = t × w + t × n × r (w escritura/token, n relecturas en el periodo, r lectura/token). */
+  w?: number; n?: number; r?: number;
+  rereads: number; session?: string; who?: string;
+}
+export interface ConsumoEvent {
+  kind: 'compaction' | 'cacheBroken' | 'coldStart'; req: number; ts: number; tokens: number;
+  cause?: 'expired' | 'modelChanged' | 'prefixChanged'; extra: number; cost: number;
+}
+export interface ConsumoSummary {
+  requests: number; base: number; lastContext: number; maxContext: number; usage: ConsumoUsage;
+  cats: ConsumoCatAgg[]; top: ConsumoTopBlock[]; events: ConsumoEvent[]; models: string[];
+  badLines: number; shrink: number; firstTs: number; lastTs: number;
+}
+export interface ConsumoWho { agentType: string | null; description: string | null }
+export interface ConsumoFileReport { path: string; who: ConsumoWho; summary: ConsumoSummary }
+export interface ConsumoSessionReport {
+  main: ConsumoFileReport; contextLine: [number, number, number][]; baseParts: [string, number][]; subagents: ConsumoFileReport[];
+  /** Consejos de la sesión (consumo/consejos.rs), ya sin los descartados. */
+  advice?: ConsumoAdvice[];
+  /** C11: ahorro si se aplican todos los consejos, sin doble conteo: [usd, eq]. */
+  adviceTotal?: [number, number];
+  /** Bloques agrupados por origen (los más caros y los que cita algún consejo). */
+  origins?: ConsumoOrigin[];
+}
+export type ConsumoSeverity = 'info' | 'low' | 'medium' | 'high';
+/** Prueba de un consejo: `session` = ruta del transcript (se abre en el cajón), `req` = petición. */
+export interface ConsumoEvidence {
+  session?: string; req?: number; who?: string; label: string; tokens: number; rereads: number; usd: number;
+  /** C10: etiqueta traducible (`consumo.adv.ev.<labelId>` con `lp`). */
+  labelId?: string; lp?: Record<string, string | number>;
+}
+export interface ConsumoAdvice {
+  id: string; rule: string; severity: ConsumoSeverity; title: string; why: string; action: string;
+  /** C10: texto por clave de i18n (`consumo.adv.<textId>.<campo>[<Variante>]`) y sus parámetros (consumo.ts adviceText). */
+  textId?: string; params?: Record<string, string | number>;
+  evidence: ConsumoEvidence[];
+  /** Ahorro estimado: tokens de entrada equivalentes, USD y parte (0..1) del total del periodo. */
+  saveEq: number; saveUsd: number; savePct: number;
+  /** Tarjeta de la que sale (`cat:<categoría>` | `event:<tipo>`) y su cifra, de los MISMOS hechos del periodo/sesión. */
+  card?: string; cardUsd?: number; cardEq?: number; cardN?: number;
+  /** Cifras con nombre que cita el texto (n, baseMain, baseSub, nMain, nSub, rowN, rowT, outT, thinkT, genShare…). */
+  nums?: Record<string, number>;
+  /**
+   * Origen o partida que cita (C9): `read|<proyecto>|<ruta>`, `bash|<comando>`, `reminder|<skill>`, `image|<sesión>`
+   * (= clave de una fila de `origins`), `gen|<quién>|<modelo>`, `cat:…`/`event:…` (tarjeta), `who|…`, `session|…`.
+   * El ahorro nunca pasa de su coste; los consejos con el mismo origen no suman más que él.
+   */
+  origin?: string; originLabel?: string; originUsd?: number; originEq?: number; originN?: number; originT?: number;
+  /** Total del periodo o de la sesión (el «de Y» de «calculado sobre X de Y»). */
+  totalUsd?: number; totalEq?: number;
+  /** Consejo de una sesión. */
+  session?: boolean;
+  /** C11: lo que quedaría del origen tras aplicarlo (= origen − ahorro) y la suposición que lo modela
+   *  (`consumo.adv.assume.<assume>` con `assumeP`). */
+  afterUsd?: number; afterEq?: number; assume?: string; assumeP?: Record<string, string | number>;
+}
+/** Bloques agrupados por origen (consejos.rs `origins`): LA agregación de los consejos, la pantalla y el informe. */
+export interface ConsumoOrigin { key: string; cat: ConsumoCat; label: string; project?: string; n: number; t: number; eq: number; usd: number }
+/** Lo que la interfaz manda al motor de consejos. */
+export interface ConsumoAdviceOpts { lang: string; dismissed: string[]; thresholds?: Record<string, number> }
+export interface ConsumoScanReport {
+  /** Inicio del periodo (epoch s; recorte por horas). */
+  since?: number;
+  /** EL total del periodo [eq, usd]: categorías, quién, modelo, proyecto y horas suman esto. */
+  total?: [number, number];
+  /** Total del periodo anterior de igual duración [eq, usd]. */
+  prevTotal?: [number, number];
+  /** C10: hay datos de antes del periodo anterior (si no, el Δ % no se enseña). */
+  prevComplete?: boolean;
+  /** Sobrecoste por tipo de suceso: [expired|modelChanged|prefixChanged|coldStart|compaction, eq, usd, veces]. */
+  eventCost?: [string, number, number, number][];
+  days: number; files: number; mainFiles: number; subFiles: number; filesRead: number; bytesRead: number; elapsedMs: number;
+  cancelled: boolean; requests: number; badLines: number; shrink: number; usage: ConsumoUsage; cats: ConsumoCatAgg[]; top: ConsumoTopBlock[];
+  baseMeanMain: number; baseMeanSub: number; byWho: [string, number, number, number][]; byModel: [string, number, number, number][];
+  compactions: number; cacheBreaks: number; breakCauses: [number, number, number]; coldStarts: number;
+  /** Sobrecoste de las cachés rotas: [eq, usd]. */
+  breakCost: [number, number];
+  /** Coste por hora epoch UTC (ts / 3600): [hora, eq, usd, peticiones]; el mismo coste atribuido que las categorías. */
+  byHour: [number, number, number, number][];
+  /** La misma factura por hora partida por categoría: [hora UTC, categoría, eq, usd] (columnas apiladas). */
+  byHourCat?: [number, ConsumoCat, number, number][];
+  /** Pesos por modelo de la tabla de precios de Rust: [modelo, lectura de caché, escritura 5 min, escritura 1 h, salida] (× entrada). */
+  modelWeights?: [string, number, number, number, number][];
+  /** Factura por carpeta de proyecto (`C--Users-x-app`): [carpeta, eq, usd, peticiones]; dentro del periodo. */
+  byProject: [string, number, number, number][];
+  pruned: number; indexBytes: number;
+  advice?: ConsumoAdvice[];
+  /** C11: ahorro si se aplican todos los consejos, sin doble conteo: [usd, eq]. */
+  adviceTotal?: [number, number];
+  /** Bloques agrupados por origen (los más caros y los que cita algún consejo). */
+  origins?: ConsumoOrigin[];
+  historyBytes?: number;
+}
+/** Consumo de una sesión (.jsonl) y sus subagentes. Fuera de Tauri: null. */
+export async function consumoSession(path: string, opts?: ConsumoAdviceOpts): Promise<ConsumoSessionReport | null> {
+  if (!inTauri) return { ...demoSessionReport(Math.floor(Date.now() / 1000)), advice: demoAdvice(opts, true) };
+  return invoke<ConsumoSessionReport | null>('consumo_session', { path, opts });
+}
+/** Consumo de la sesión de un panel (`dir` = carpeta de la cuenta, `id` = UUID de la sesión). Modo demo: datos de ejemplo. */
+export async function consumoPane(dir: string, id: string, opts?: ConsumoAdviceOpts): Promise<ConsumoSessionReport | null> {
+  if (!inTauri) return { ...demoSessionReport(Math.floor(Date.now() / 1000)), advice: demoAdvice(opts, true) };
+  return invoke<ConsumoSessionReport | null>('consumo_pane', { dir, id, opts });
+}
+/** Informe Markdown para pegar a una IA (el mismo que devuelve la herramienta MCP `usage_report`). */
+export async function consumoReport(days: number, detail: 'summary' | 'full', opts?: ConsumoAdviceOpts): Promise<string> {
+  if (!inTauri) { await new Promise((r) => setTimeout(r, 120)); return demoReport(days, detail, opts); }
+  return invoke<string>('consumo_report', { days, detail, opts });
+}
+/** Guarda el informe como .md en Descargas; devuelve la ruta. */
+export async function consumoSaveReport(markdown: string): Promise<string> {
+  if (!inTauri) return 'C:\\Users\\demo\\Downloads\\orchestra-usage-demo.md';
+  return invoke<string>('consumo_save_report', { markdown });
+}
+/** Escaneo global (por defecto 7 días, todas las cuentas). Progreso por `consumo-progress`. */
+export async function consumoScan(days?: number, accounts?: string[], onProgress?: (done: number, total: number) => void, opts?: ConsumoAdviceOpts, since?: number): Promise<ConsumoScanReport | null> {
+  if (!inTauri) {
+    // Modo demo: un escaneo de mentira con progreso (para ver la barra y el botón de cancelar).
+    demoCancel = false;
+    for (let i = 1; i <= 8; i++) {
+      await new Promise((r) => setTimeout(r, 60));
+      if (demoCancel) return { ...demoScanReport(days ?? 7, Math.floor(Date.now() / 1000)), cancelled: true, advice: demoAdvice(opts, false, days ?? 7) };
+      onProgress?.(i * 40, 320);
+    }
+    // `?consumo=empty` / `?consumo=error`: estados vacío y de error (capturas).
+    const flag = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('consumo') : null;
+    if (flag === 'error') throw new Error('demo: could not read ~/.claude/projects (access denied)');
+    const rep = demoScanReport(days ?? 7, Math.floor(Date.now() / 1000));
+    if (flag === 'empty') {
+      return { ...rep, cats: [], top: [], byWho: [], byModel: [], byHour: [], byHourCat: [], byProject: [], eventCost: [], requests: 0, files: 0, mainFiles: 0, subFiles: 0,
+        total: [0, 0], prevTotal: [0, 0], compactions: 0, cacheBreaks: 0, coldStarts: 0, breakCauses: [0, 0, 0], breakCost: [0, 0], baseMeanMain: 0, baseMeanSub: 0, modelWeights: [], advice: [] };
+    }
+    return { ...rep, advice: demoAdvice(opts, false, days ?? 7) };
+  }
+  const un = onProgress ? await listen<{ done: number; total: number }>('consumo-progress', (e) => onProgress(e.payload.done, e.payload.total)) : null;
+  try { return await invoke<ConsumoScanReport>('consumo_scan', { days, accounts, opts, since }); } finally { un?.(); }
+}
+export async function consumoCancel(): Promise<void> { if (inTauri) await invoke('consumo_cancel'); else demoCancel = true; }
+let demoCancel = false;

@@ -1,0 +1,1609 @@
+{
+  "scan": {
+    "advice": [
+      {
+        "action": "Vuelve antes de que caduque, compacta (/compact) o abre sesión nueva antes de una pausa larga, y baja el umbral de auto-compact para que lo que dejas parado sea pequeño.",
+        "afterEq": 37986.94830058457,
+        "afterUsd": 0.1519477932023382,
+        "assume": "compact",
+        "assumeP": {
+          "pc": 20.0
+        },
+        "card": "event:expired",
+        "cardEq": 163306.94824511904,
+        "cardN": 2,
+        "cardUsd": 0.6532277929804762,
+        "evidence": [
+          {
+            "label": "100 min",
+            "req": 3,
+            "rereads": 0,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+            "tokens": 41876,
+            "usd": 0.3266138964902381,
+            "who": "main"
+          },
+          {
+            "label": "100 min",
+            "req": 3,
+            "rereads": 0,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+            "tokens": 41876,
+            "usd": 0.3266138964902381,
+            "who": "main"
+          }
+        ],
+        "id": "cacheExpired:6bb1bc52",
+        "nums": {
+          "compactions": 2.0,
+          "n": 2.0,
+          "post": 0.20179372197309417
+        },
+        "origin": "event:expired",
+        "originEq": 163306.94824511904,
+        "originLabel": "event:expired",
+        "originN": 2,
+        "originT": 0,
+        "originUsd": 0.6532277929804762,
+        "params": {
+          "k": 2,
+          "kPl": 2,
+          "n": 2,
+          "nPl": 2,
+          "pc": 20.0,
+          "scope": "@ofPeriod",
+          "whyV": "measured"
+        },
+        "rule": "cacheExpired",
+        "saveEq": 125319.99994453447,
+        "savePct": 0.3862470584686007,
+        "saveUsd": 0.501279999778138,
+        "session": false,
+        "severity": "high",
+        "textId": "cacheExpired",
+        "title": "2 cachés caducadas: se volvió a escribir el contexto entero",
+        "totalEq": 416586.2267991215,
+        "totalUsd": 1.2978221808746504,
+        "why": "Tras una pausa más larga que la vida de la caché (5 min o 1 h), la siguiente petición reescribe el contexto entero en vez de leerlo. El ahorro es ese sobrecoste menos lo que costaría compactar antes de la pausa (leer el contexto una vez y escribir un resumen de ≈20 % del contexto, medido en 2 compactaciones del periodo)."
+      },
+      {
+        "action": "Usa grep -n para encontrar el sitio y Read con offset/limit (unos cientos de líneas); léelo una vez por sesión y apunta lo que necesitas.",
+        "afterEq": 8798.096144693005,
+        "afterUsd": 0.034392384578772014,
+        "assume": "read",
+        "assumeP": {
+          "keepTok": 4000
+        },
+        "card": "cat:read",
+        "cardEq": 66409.23678019413,
+        "cardN": 21,
+        "cardUsd": 0.24753688481548053,
+        "evidence": [
+          {
+            "label": "x.rs",
+            "req": 1,
+            "rereads": 3,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+            "tokens": 10100,
+            "usd": 0.08684077106139933,
+            "who": "main"
+          }
+        ],
+        "id": "bigRead:8cfd5cfb",
+        "nums": {
+          "again": 0.0,
+          "rowN": 1.0,
+          "rowT": 10100.0,
+          "whole": 1.0
+        },
+        "origin": "read|C--proj-b|x.rs",
+        "originEq": 22215.192765349835,
+        "originLabel": "x.rs",
+        "originN": 1,
+        "originT": 10100,
+        "originUsd": 0.08684077106139933,
+        "params": {
+          "again": 0,
+          "againPl": 0,
+          "kb": 30,
+          "name": "x.rs",
+          "rn": 1,
+          "rnPl": 1,
+          "rtTok": 10100,
+          "titleV": "whole",
+          "whole": 1,
+          "wholePl": 1
+        },
+        "rule": "bigRead",
+        "saveEq": 13417.09662065683,
+        "savePct": 0.04041261372746797,
+        "saveUsd": 0.05244838648262731,
+        "session": false,
+        "severity": "medium",
+        "textId": "read",
+        "title": "Lee «x.rs» por rangos y una vez: 1 lecturas (10k tokens), 1 enteras (de más de 30 KB)",
+        "totalEq": 416586.2267991215,
+        "totalUsd": 1.2978221808746504,
+        "why": "Cada lectura añade otra copia al contexto y se queda ahí, releída en cada petición. El ahorro cuenta cada lectura una vez: una repetida ahorra entera; la que se queda ahorra lo que pasa de un rango."
+      },
+      {
+        "action": "Usa grep -n para encontrar el sitio y Read con offset/limit (unos cientos de líneas); léelo una vez por sesión y apunta lo que necesitas.",
+        "afterEq": 8798.096144693005,
+        "afterUsd": 0.034392384578772014,
+        "assume": "read",
+        "assumeP": {
+          "keepTok": 4000
+        },
+        "card": "cat:read",
+        "cardEq": 66409.23678019413,
+        "cardN": 21,
+        "cardUsd": 0.24753688481548053,
+        "evidence": [
+          {
+            "label": "x.rs",
+            "req": 1,
+            "rereads": 3,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+            "tokens": 10100,
+            "usd": 0.08684077106139933,
+            "who": "main"
+          }
+        ],
+        "id": "bigRead:ad147368",
+        "nums": {
+          "again": 0.0,
+          "rowN": 1.0,
+          "rowT": 10100.0,
+          "whole": 1.0
+        },
+        "origin": "read|C--proj-a|x.rs",
+        "originEq": 22215.192765349835,
+        "originLabel": "x.rs",
+        "originN": 1,
+        "originT": 10100,
+        "originUsd": 0.08684077106139933,
+        "params": {
+          "again": 0,
+          "againPl": 0,
+          "kb": 30,
+          "name": "x.rs",
+          "rn": 1,
+          "rnPl": 1,
+          "rtTok": 10100,
+          "titleV": "whole",
+          "whole": 1,
+          "wholePl": 1
+        },
+        "rule": "bigRead",
+        "saveEq": 13417.09662065683,
+        "savePct": 0.04041261372746797,
+        "saveUsd": 0.05244838648262731,
+        "session": false,
+        "severity": "medium",
+        "textId": "read",
+        "title": "Lee «x.rs» por rangos y una vez: 1 lecturas (10k tokens), 1 enteras (de más de 30 KB)",
+        "totalEq": 416586.2267991215,
+        "totalUsd": 1.2978221808746504,
+        "why": "Cada lectura añade otra copia al contexto y se queda ahí, releída en cada petición. El ahorro cuenta cada lectura una vez: una repetida ahorra entera; la que se queda ahorra lo que pasa de un rango."
+      },
+      {
+        "action": "Pon effort: low y model: sonnet (o haiku) en la definición de «Explore», y pídele informes de ≤ 20 líneas.",
+        "afterEq": 4419.996656292257,
+        "afterUsd": 0.017679986625169033,
+        "assume": "genCheap",
+        "assumeP": {
+          "model": "Sonnet 5.5",
+          "outPct": 0.2,
+          "thinkPct": 0.3
+        },
+        "card": "cat:output,thinking",
+        "cardEq": 31454.74576461734,
+        "cardN": 32,
+        "cardUsd": 0.1158202741031593,
+        "evidence": [
+          {
+            "label": "salida 2k / razonamiento 383",
+            "labelId": "gen",
+            "lp": {
+              "outTok": 1509,
+              "thinkTok": 383
+            },
+            "rereads": 0,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555\\subagents\\agent-a1.jsonl",
+            "tokens": 1892,
+            "usd": 0.04538834868687565,
+            "who": "Explore"
+          }
+        ],
+        "id": "output:e671da54",
+        "nums": {
+          "files": 1.0,
+          "genEq": 9460.0,
+          "genShare": 0.833694132850039,
+          "genUsd": 0.03784,
+          "outT": 1509.0,
+          "thinkT": 383.0
+        },
+        "origin": "gen|Explore|claude-opus-5-5",
+        "originEq": 11347.087171718911,
+        "originLabel": "Explore · Opus 5.5",
+        "originN": 1,
+        "originT": 1892,
+        "originUsd": 0.04538834868687565,
+        "params": {
+          "actionV": "mechOpus",
+          "gsPct": 0.833694132850039,
+          "mn": "Opus 5.5",
+          "n": 1,
+          "nMainPl": 1,
+          "nPl": 1,
+          "outTok": 1509,
+          "rsPct": 0.16630586714996098,
+          "thinkTok": 383,
+          "titleV": "agent",
+          "who": "Explore",
+          "whyV": "mech"
+        },
+        "rule": "output",
+        "saveEq": 6927.090515426654,
+        "savePct": 0.02134989097122144,
+        "saveUsd": 0.027708362061706616,
+        "session": false,
+        "severity": "medium",
+        "textId": "gen",
+        "title": "«Explore» en Opus 5.5 genera 2k de salida y 383 de razonamiento (1 fichero)",
+        "totalEq": 416586.2267991215,
+        "totalUsd": 1.2978221808746504,
+        "why": "Se cobra a precio de salida (5× la entrada). De su coste, el 83,4 % es generarlo y el 16,6 % releerlo en las peticiones siguientes (trabajo mecánico)."
+      },
+      {
+        "action": "En el hilo principal: baja el esfuerzo de la sesión para lo rutinario (/effort medium o low), delega las lecturas y los comandos largos a un subagente más barato y pide respuestas cortas (≤ 20 líneas).",
+        "afterEq": 16337.472606729976,
+        "afterUsd": 0.057225939400730466,
+        "assume": "gen",
+        "assumeP": {
+          "model": "",
+          "outPct": 0.2,
+          "thinkPct": 0.15
+        },
+        "card": "cat:output,thinking",
+        "cardEq": 31454.74576461734,
+        "cardN": 32,
+        "cardUsd": 0.1158202741031593,
+        "evidence": [
+          {
+            "label": "salida 1k / razonamiento 375",
+            "labelId": "gen",
+            "lp": {
+              "outTok": 1125,
+              "thinkTok": 375
+            },
+            "rereads": 0,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+            "tokens": 1500,
+            "usd": 0.035215962708141826,
+            "who": "main"
+          },
+          {
+            "label": "salida 1k / razonamiento 375",
+            "labelId": "gen",
+            "lp": {
+              "outTok": 1125,
+              "thinkTok": 375
+            },
+            "rereads": 0,
+            "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+            "tokens": 1500,
+            "usd": 0.035215962708141826,
+            "who": "main"
+          }
+        ],
+        "id": "output:814b1a38",
+        "nums": {
+          "files": 2.0,
+          "genEq": 15000.0,
+          "genShare": 0.7383015541980024,
+          "genUsd": 0.052000000000000005,
+          "outT": 2250.0,
+          "thinkT": 750.0
+        },
+        "origin": "gen|main|claude-opus-5-5",
+        "originEq": 20107.65859289843,
+        "originLabel": "main · Opus 5.5",
+        "originN": 2,
+        "originT": 3000,
+        "originUsd": 0.07043192541628365,
+        "params": {
+          "actionV": "main",
+          "gsPct": 0.7383015541980024,
+          "mn": "Opus 5.5",
+          "n": 2,
+          "nMainPl": 2,
+          "nPl": 2,
+          "outTok": 2250,
+          "rsPct": 0.26169844580199764,
+          "thinkTok": 750,
+          "titleV": "main",
+          "who": "main",
+          "whyV": "plain"
+        },
+        "rule": "output",
+        "saveEq": 3770.185986168455,
+        "savePct": 0.010175497236958287,
+        "saveUsd": 0.013205986015553183,
+        "session": false,
+        "severity": "medium",
+        "textId": "gen",
+        "title": "El hilo principal en Opus 5.5 genera 2k de salida y 750 de razonamiento (2 sesiones)",
+        "totalEq": 416586.2267991215,
+        "totalUsd": 1.2978221808746504,
+        "why": "Se cobra a precio de salida (5× la entrada). De su coste, el 73,8 % es generarlo y el 26,2 % releerlo en las peticiones siguientes."
+      }
+    ],
+    "adviceTotal": [
+      0.5963452462357346,
+      152858.20489881706
+    ],
+    "badLines": 0,
+    "baseMeanMain": 30005,
+    "baseMeanSub": 12470,
+    "breakCauses": [
+      2,
+      2,
+      0
+    ],
+    "breakCost": [
+      327746.02439386636,
+      0.9821059452779708
+    ],
+    "byHour": [
+      [
+        498268,
+        32793.65407996795,
+        0.1311746163198718,
+        5
+      ],
+      [
+        498322,
+        92820.51277482953,
+        0.3712820510993181,
+        3
+      ],
+      [
+        498324,
+        99075.77358474722,
+        0.21204173117807135,
+        4
+      ],
+      [
+        498346,
+        92820.51277482953,
+        0.3712820510993181,
+        3
+      ],
+      [
+        498348,
+        99075.77358474722,
+        0.21204173117807135,
+        4
+      ]
+    ],
+    "byHourCat": [
+      [
+        498268,
+        "base",
+        18081.0,
+        0.07232399999999999
+      ],
+      [
+        498268,
+        "read",
+        1947.8001845535764,
+        0.007791200738214304
+      ],
+      [
+        498268,
+        "reminder",
+        1417.7667236954665,
+        0.005671066894781864
+      ],
+      [
+        498268,
+        "output",
+        8970.322923812775,
+        0.0358812916952511
+      ],
+      [
+        498268,
+        "thinking",
+        2376.764247906137,
+        0.009507056991624548
+      ],
+      [
+        498322,
+        "base",
+        63005.5,
+        0.252022
+      ],
+      [
+        498322,
+        "read",
+        24895.82686098393,
+        0.0995833074439357
+      ],
+      [
+        498322,
+        "output",
+        3689.3894353841997,
+        0.014757557741536798
+      ],
+      [
+        498322,
+        "thinking",
+        1229.7964784614,
+        0.004919185913845599
+      ],
+      [
+        498324,
+        "base",
+        67507.40369824381,
+        0.13801530739648762
+      ],
+      [
+        498324,
+        "read",
+        7334.891436836345,
+        0.020289534594697404
+      ],
+      [
+        498324,
+        "user",
+        199.98876530726886,
+        0.00039997753061453775
+      ],
+      [
+        498324,
+        "compact",
+        18898.846301756184,
+        0.03779769260351237
+      ],
+      [
+        498324,
+        "output",
+        3850.9825369527116,
+        0.01165441428956957
+      ],
+      [
+        498324,
+        "thinking",
+        1283.6608456509039,
+        0.0038848047631898567
+      ],
+      [
+        498346,
+        "base",
+        63005.5,
+        0.252022
+      ],
+      [
+        498346,
+        "read",
+        24895.82686098393,
+        0.0995833074439357
+      ],
+      [
+        498346,
+        "output",
+        3689.3894353841997,
+        0.014757557741536798
+      ],
+      [
+        498346,
+        "thinking",
+        1229.7964784614,
+        0.004919185913845599
+      ],
+      [
+        498348,
+        "base",
+        67507.40369824381,
+        0.13801530739648762
+      ],
+      [
+        498348,
+        "read",
+        7334.891436836345,
+        0.020289534594697404
+      ],
+      [
+        498348,
+        "user",
+        199.98876530726886,
+        0.00039997753061453775
+      ],
+      [
+        498348,
+        "compact",
+        18898.846301756184,
+        0.03779769260351237
+      ],
+      [
+        498348,
+        "output",
+        3850.9825369527116,
+        0.01165441428956957
+      ],
+      [
+        498348,
+        "thinking",
+        1283.6608456509039,
+        0.0038848047631898567
+      ]
+    ],
+    "byModel": [
+      [
+        "claude-opus-5-5",
+        231324.86363820394,
+        0.9252994545528157,
+        13
+      ],
+      [
+        "claude-sonnet-5-5",
+        185261.36316091754,
+        0.37252272632183503,
+        6
+      ]
+    ],
+    "byProject": [
+      [
+        "C--proj-a",
+        224689.9404395447,
+        0.7144983985972612,
+        12
+      ],
+      [
+        "C--proj-b",
+        191896.28635957674,
+        0.5833237822773893,
+        7
+      ]
+    ],
+    "byWho": [
+      [
+        "main",
+        383792.5727191535,
+        1.1666475645547787,
+        14
+      ],
+      [
+        "sub:Explore",
+        32793.65407996796,
+        0.13117461631987182,
+        5
+      ]
+    ],
+    "bytesRead": 221193,
+    "cacheBreaks": 4,
+    "cancelled": false,
+    "cats": [
+      {
+        "cat": "base",
+        "count": 5,
+        "eq": 279106.8073964876,
+        "t": 132490,
+        "usd": 0.8523986147929752
+      },
+      {
+        "cat": "read",
+        "count": 21,
+        "eq": 66409.23678019413,
+        "t": 31296,
+        "usd": 0.24753688481548053
+      },
+      {
+        "cat": "reminder",
+        "count": 1,
+        "eq": 1417.7667236954665,
+        "t": 1013,
+        "usd": 0.005671066894781864
+      },
+      {
+        "cat": "user",
+        "count": 2,
+        "eq": 399.9775306145377,
+        "t": 200,
+        "usd": 0.0007999550612290755
+      },
+      {
+        "cat": "compact",
+        "count": 2,
+        "eq": 37797.69260351237,
+        "t": 18000,
+        "usd": 0.07559538520702475
+      },
+      {
+        "cat": "output",
+        "count": 16,
+        "eq": 24051.066868486596,
+        "t": 2891,
+        "usd": 0.08870523575746385
+      },
+      {
+        "cat": "thinking",
+        "count": 16,
+        "eq": 7403.678896130745,
+        "t": 955,
+        "usd": 0.027115038345695463
+      }
+    ],
+    "coldStarts": 3,
+    "compactions": 2,
+    "days": 3650,
+    "elapsedMs": 82,
+    "eventCost": [
+      [
+        "expired",
+        163306.94824511904,
+        0.6532277929804762,
+        2
+      ],
+      [
+        "coldStart",
+        131973.0,
+        0.527892,
+        3
+      ],
+      [
+        "modelChanged",
+        164439.07614874732,
+        0.3288781522974946,
+        2
+      ],
+      [
+        "compaction",
+        148208.99999999997,
+        0.29641799999999996,
+        2
+      ]
+    ],
+    "files": 3,
+    "filesRead": 3,
+    "historyBytes": 0,
+    "indexBytes": 10142,
+    "mainFiles": 2,
+    "modelWeights": [
+      [
+        "claude-opus-5-5",
+        0.05,
+        1.25,
+        2.0,
+        5.0
+      ],
+      [
+        "claude-sonnet-5-5",
+        0.1,
+        1.25,
+        2.0,
+        5.0
+      ]
+    ],
+    "origins": [
+      {
+        "cat": "read",
+        "eq": 22215.192765349835,
+        "key": "read|C--proj-a|x.rs",
+        "label": "x.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 10100,
+        "usd": 0.08684077106139933
+      },
+      {
+        "cat": "read",
+        "eq": 22215.192765349835,
+        "key": "read|C--proj-b|x.rs",
+        "label": "x.rs",
+        "n": 1,
+        "project": "C--proj-b",
+        "t": 10100,
+        "usd": 0.08684077106139933
+      },
+      {
+        "cat": "read",
+        "eq": 4510.6340956340955,
+        "key": "read|C--proj-a|y.rs",
+        "label": "y.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 2100,
+        "usd": 0.017622536382536382
+      },
+      {
+        "cat": "read",
+        "eq": 4510.6340956340955,
+        "key": "read|C--proj-b|y.rs",
+        "label": "y.rs",
+        "n": 1,
+        "project": "C--proj-b",
+        "t": 2100,
+        "usd": 0.017622536382536382
+      },
+      {
+        "cat": "read",
+        "eq": 2309.8758605123576,
+        "key": "read|C--proj-a|z.rs",
+        "label": "z.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 1100,
+        "usd": 0.00901950344204943
+      },
+      {
+        "cat": "read",
+        "eq": 2309.8758605123576,
+        "key": "read|C--proj-b|z.rs",
+        "label": "z.rs",
+        "n": 1,
+        "project": "C--proj-b",
+        "t": 1100,
+        "usd": 0.00901950344204943
+      },
+      {
+        "cat": "read",
+        "eq": 3195.0155763239877,
+        "key": "read|C--proj-a|w.rs",
+        "label": "w.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 1600,
+        "usd": 0.006390031152647975
+      },
+      {
+        "cat": "read",
+        "eq": 3195.0155763239877,
+        "key": "read|C--proj-b|w.rs",
+        "label": "w.rs",
+        "n": 1,
+        "project": "C--proj-b",
+        "t": 1600,
+        "usd": 0.006390031152647975
+      },
+      {
+        "cat": "reminder",
+        "eq": 1417.7667236954662,
+        "key": "reminder|mcp_instructions_delta",
+        "label": "mcp_instructions_delta",
+        "n": 1,
+        "project": "",
+        "t": 1013,
+        "usd": 0.005671066894781865
+      }
+    ],
+    "prevComplete": false,
+    "prevTotal": [
+      0.0,
+      0.0
+    ],
+    "pruned": 0,
+    "requests": 19,
+    "shrink": 0,
+    "since": 1,
+    "subFiles": 1,
+    "top": [
+      {
+        "cat": "read",
+        "detail": "x.rs",
+        "eq": 22215.192765349835,
+        "n": 3,
+        "r": 0.06666666666666667,
+        "req": 1,
+        "rereads": 3,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+        "t": 10100,
+        "tool": "Read",
+        "ts": 1794045605,
+        "usd": 0.08684077106139933,
+        "w": 1.999524036173251,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "x.rs",
+        "eq": 22215.192765349835,
+        "n": 3,
+        "r": 0.06666666666666667,
+        "req": 1,
+        "rereads": 3,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+        "t": 10100,
+        "tool": "Read",
+        "ts": 1793959205,
+        "usd": 0.08684077106139933,
+        "w": 1.999524036173251,
+        "who": "main"
+      },
+      {
+        "cat": "compact",
+        "detail": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz…",
+        "eq": 18898.846301756184,
+        "n": 1,
+        "r": 0.1,
+        "req": 5,
+        "rereads": 1,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+        "t": 9000,
+        "ts": 1794053110,
+        "usd": 0.03779769260351237,
+        "w": 1.9998718113062426,
+        "who": "main"
+      },
+      {
+        "cat": "compact",
+        "detail": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz…",
+        "eq": 18898.846301756184,
+        "n": 1,
+        "r": 0.1,
+        "req": 5,
+        "rereads": 1,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+        "t": 9000,
+        "ts": 1793966710,
+        "usd": 0.03779769260351237,
+        "w": 1.9998718113062426,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "y.rs",
+        "eq": 4510.6340956340955,
+        "n": 2,
+        "r": 0.075,
+        "req": 2,
+        "rereads": 2,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+        "t": 2100,
+        "tool": "Read",
+        "ts": 1794046805,
+        "usd": 0.017622536382536382,
+        "w": 1.9979209979209978,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "y.rs",
+        "eq": 4510.6340956340955,
+        "n": 2,
+        "r": 0.075,
+        "req": 2,
+        "rereads": 2,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+        "t": 2100,
+        "tool": "Read",
+        "ts": 1793960405,
+        "usd": 0.017622536382536382,
+        "w": 1.9979209979209978,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "z.rs",
+        "eq": 2309.8758605123576,
+        "n": 1,
+        "r": 0.1,
+        "req": 3,
+        "rereads": 1,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+        "t": 1100,
+        "tool": "Read",
+        "ts": 1794052809,
+        "usd": 0.00901950344204943,
+        "w": 1.999887145920325,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "z.rs",
+        "eq": 2309.8758605123576,
+        "n": 1,
+        "r": 0.1,
+        "req": 3,
+        "rereads": 1,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+        "t": 1100,
+        "tool": "Read",
+        "ts": 1793966409,
+        "usd": 0.00901950344204943,
+        "w": 1.999887145920325,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "w.rs",
+        "eq": 3195.0155763239877,
+        "n": 0,
+        "r": 0.0,
+        "req": 6,
+        "rereads": 0,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+        "t": 1600,
+        "tool": "Read",
+        "ts": 1794053130,
+        "usd": 0.006390031152647975,
+        "w": 1.9968847352024923,
+        "who": "main"
+      },
+      {
+        "cat": "read",
+        "detail": "w.rs",
+        "eq": 3195.0155763239877,
+        "n": 0,
+        "r": 0.0,
+        "req": 6,
+        "rereads": 0,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-b\\99999999-2222-3333-4444-555555555555.jsonl",
+        "t": 1600,
+        "tool": "Read",
+        "ts": 1793966730,
+        "usd": 0.006390031152647975,
+        "w": 1.9968847352024923,
+        "who": "main"
+      },
+      {
+        "cat": "reminder",
+        "eq": 1417.7667236954662,
+        "n": 3,
+        "r": 0.05000000000000002,
+        "req": 1,
+        "rereads": 3,
+        "session": "\\\\?\\C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555\\subagents\\agent-a1.jsonl",
+        "t": 1013,
+        "tool": "mcp_instructions_delta",
+        "ts": 1793767695,
+        "usd": 0.005671066894781865,
+        "w": 1.2495722840034218,
+        "who": "sub:Explore"
+      }
+    ],
+    "total": [
+      416586.2267991215,
+      1.2978221808746504
+    ],
+    "usage": {
+      "cache1h": 344600,
+      "cache5m": 16423,
+      "cacheCreate": 361023,
+      "cacheRead": 275290,
+      "input": 80,
+      "output": 4892,
+      "thinking": 1133
+    }
+  },
+  "session": {
+    "advice": [
+      {
+        "action": "Vuelve antes de que caduque, compacta (/compact) o abre sesión nueva antes de una pausa larga, y baja el umbral de auto-compact para que lo que dejas parado sea pequeño.",
+        "afterEq": 18993.474150292284,
+        "afterUsd": 0.0759738966011691,
+        "assume": "compact",
+        "assumeP": {
+          "pc": 20.0
+        },
+        "card": "event:expired",
+        "cardEq": 81653.47412255952,
+        "cardN": 1,
+        "cardUsd": 0.3266138964902381,
+        "evidence": [
+          {
+            "label": "100 min",
+            "req": 3,
+            "rereads": 0,
+            "session": "C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+            "tokens": 41876,
+            "usd": 0.3266138964902381,
+            "who": "main"
+          }
+        ],
+        "id": "cacheExpired:6bb1bc52",
+        "nums": {
+          "compactions": 1.0,
+          "n": 1.0,
+          "post": 0.20179372197309417
+        },
+        "origin": "event:expired",
+        "originEq": 81653.47412255952,
+        "originLabel": "event:expired",
+        "originN": 1,
+        "originT": 0,
+        "originUsd": 0.3266138964902381,
+        "params": {
+          "k": 1,
+          "kPl": 1,
+          "n": 1,
+          "nPl": 1,
+          "pc": 20.0,
+          "scope": "@ofSession",
+          "whyV": "measured"
+        },
+        "rule": "cacheExpired",
+        "saveEq": 62659.99997226724,
+        "savePct": 0.35079154884200986,
+        "saveUsd": 0.250639999889069,
+        "session": true,
+        "severity": "high",
+        "textId": "cacheExpired",
+        "title": "1 cachés caducadas: se volvió a escribir el contexto entero",
+        "totalEq": 224689.9404395447,
+        "totalUsd": 0.7144983985972612,
+        "why": "Tras una pausa más larga que la vida de la caché (5 min o 1 h), la siguiente petición reescribe el contexto entero en vez de leerlo. El ahorro es ese sobrecoste menos lo que costaría compactar antes de la pausa (leer el contexto una vez y escribir un resumen de ≈20 % del contexto, medido en 1 compactaciones de la sesión)."
+      },
+      {
+        "action": "Usa grep -n para encontrar el sitio y Read con offset/limit (unos cientos de líneas); léelo una vez por sesión y apunta lo que necesitas.",
+        "afterEq": 8798.096144693005,
+        "afterUsd": 0.034392384578772014,
+        "assume": "read",
+        "assumeP": {
+          "keepTok": 4000
+        },
+        "card": "cat:read",
+        "cardEq": 34178.51848237385,
+        "cardN": 17,
+        "cardUsd": 0.12766404277684743,
+        "evidence": [
+          {
+            "label": "x.rs",
+            "req": 1,
+            "rereads": 3,
+            "session": "C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+            "tokens": 10100,
+            "usd": 0.08684077106139933,
+            "who": "main"
+          }
+        ],
+        "id": "bigRead:ad147368",
+        "nums": {
+          "again": 0.0,
+          "rowN": 1.0,
+          "rowT": 10100.0,
+          "whole": 1.0
+        },
+        "origin": "read|C--proj-a|x.rs",
+        "originEq": 22215.192765349835,
+        "originLabel": "x.rs",
+        "originN": 1,
+        "originT": 10100,
+        "originUsd": 0.08684077106139933,
+        "params": {
+          "again": 0,
+          "againPl": 0,
+          "kb": 30,
+          "name": "x.rs",
+          "rn": 1,
+          "rnPl": 1,
+          "rtTok": 10100,
+          "titleV": "whole",
+          "whole": 1,
+          "wholePl": 1
+        },
+        "rule": "bigRead",
+        "saveEq": 13417.09662065683,
+        "savePct": 0.07340588388384998,
+        "saveUsd": 0.05244838648262731,
+        "session": true,
+        "severity": "high",
+        "textId": "read",
+        "title": "Lee «x.rs» por rangos y una vez: 1 lecturas (10k tokens), 1 enteras (de más de 30 KB)",
+        "totalEq": 224689.9404395447,
+        "totalUsd": 0.7144983985972612,
+        "why": "Cada lectura añade otra copia al contexto y se queda ahí, releída en cada petición. El ahorro cuenta cada lectura una vez: una repetida ahorra entera; la que se queda ahorra lo que pasa de un rango."
+      },
+      {
+        "action": "Pon effort: low y model: sonnet (o haiku) en la definición de «Explore», y pídele informes de ≤ 20 líneas.",
+        "afterEq": 4419.996656292257,
+        "afterUsd": 0.017679986625169033,
+        "assume": "genCheap",
+        "assumeP": {
+          "model": "Sonnet 5.5",
+          "outPct": 0.2,
+          "thinkPct": 0.3
+        },
+        "card": "cat:output,thinking",
+        "cardEq": 21400.916468168125,
+        "cardN": 20,
+        "cardUsd": 0.08060431139501747,
+        "evidence": [
+          {
+            "label": "salida 2k / razonamiento 383",
+            "labelId": "gen",
+            "lp": {
+              "outTok": 1509,
+              "thinkTok": 383
+            },
+            "rereads": 0,
+            "session": "C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555\\subagents\\agent-a1.jsonl",
+            "tokens": 1892,
+            "usd": 0.04538834868687565,
+            "who": "Explore"
+          }
+        ],
+        "id": "output:e671da54",
+        "nums": {
+          "files": 1.0,
+          "genEq": 9460.0,
+          "genShare": 0.833694132850039,
+          "genUsd": 0.03784,
+          "outT": 1509.0,
+          "thinkT": 383.0
+        },
+        "origin": "gen|Explore|claude-opus-5-5",
+        "originEq": 11347.087171718911,
+        "originLabel": "Explore · Opus 5.5",
+        "originN": 1,
+        "originT": 1892,
+        "originUsd": 0.04538834868687565,
+        "params": {
+          "actionV": "mechOpus",
+          "gsPct": 0.833694132850039,
+          "mn": "Opus 5.5",
+          "n": 1,
+          "nMainPl": 1,
+          "nPl": 1,
+          "outTok": 1509,
+          "rsPct": 0.16630586714996098,
+          "thinkTok": 383,
+          "titleV": "agent",
+          "who": "Explore",
+          "whyV": "mech"
+        },
+        "rule": "output",
+        "saveEq": 6927.090515426654,
+        "savePct": 0.03878015978217034,
+        "saveUsd": 0.027708362061706616,
+        "session": true,
+        "severity": "medium",
+        "textId": "gen",
+        "title": "«Explore» en Opus 5.5 genera 2k de salida y 383 de razonamiento (1 fichero)",
+        "totalEq": 224689.9404395447,
+        "totalUsd": 0.7144983985972612,
+        "why": "Se cobra a precio de salida (5× la entrada). De su coste, el 83,4 % es generarlo y el 16,6 % releerlo en las peticiones siguientes (trabajo mecánico)."
+      },
+      {
+        "action": "En el hilo principal: baja el esfuerzo de la sesión para lo rutinario (/effort medium o low), delega las lecturas y los comandos largos a un subagente más barato y pide respuestas cortas (≤ 20 líneas).",
+        "afterEq": 8168.736303364988,
+        "afterUsd": 0.028612969700365233,
+        "assume": "gen",
+        "assumeP": {
+          "model": "",
+          "outPct": 0.2,
+          "thinkPct": 0.15
+        },
+        "card": "cat:output,thinking",
+        "cardEq": 21400.916468168125,
+        "cardN": 20,
+        "cardUsd": 0.08060431139501747,
+        "evidence": [
+          {
+            "label": "salida 1k / razonamiento 375",
+            "labelId": "gen",
+            "lp": {
+              "outTok": 1125,
+              "thinkTok": 375
+            },
+            "rereads": 0,
+            "session": "C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+            "tokens": 1500,
+            "usd": 0.035215962708141826,
+            "who": "main"
+          }
+        ],
+        "id": "output:814b1a38",
+        "nums": {
+          "files": 1.0,
+          "genEq": 7500.0,
+          "genShare": 0.7383015541980024,
+          "genUsd": 0.026000000000000002,
+          "outT": 1125.0,
+          "thinkT": 375.0
+        },
+        "origin": "gen|main|claude-opus-5-5",
+        "originEq": 10053.829296449216,
+        "originLabel": "main · Opus 5.5",
+        "originN": 1,
+        "originT": 1500,
+        "originUsd": 0.035215962708141826,
+        "params": {
+          "actionV": "main",
+          "gsPct": 0.7383015541980024,
+          "mn": "Opus 5.5",
+          "n": 1,
+          "nMainPl": 1,
+          "nPl": 1,
+          "outTok": 1125,
+          "rsPct": 0.26169844580199764,
+          "thinkTok": 375,
+          "titleV": "main",
+          "who": "main",
+          "whyV": "plain"
+        },
+        "rule": "output",
+        "saveEq": 1885.0929930842276,
+        "savePct": 0.009241438498308626,
+        "saveUsd": 0.006602993007776592,
+        "session": true,
+        "severity": "low",
+        "textId": "gen",
+        "title": "El hilo principal en Opus 5.5 genera 1k de salida y 375 de razonamiento (1 sesión)",
+        "totalEq": 224689.9404395447,
+        "totalUsd": 0.7144983985972612,
+        "why": "Se cobra a precio de salida (5× la entrada). De su coste, el 73,8 % es generarlo y el 26,2 % releerlo en las peticiones siguientes."
+      }
+    ],
+    "adviceTotal": [
+      0.3120268041487206,
+      79892.64770712185
+    ],
+    "baseParts": [],
+    "contextLine": [
+      [
+        1794045600,
+        30005,
+        0
+      ],
+      [
+        1794045605,
+        40505,
+        0
+      ],
+      [
+        1794046805,
+        42905,
+        0
+      ],
+      [
+        1794052809,
+        44305,
+        0
+      ],
+      [
+        1794052825,
+        44505,
+        0
+      ],
+      [
+        1794053110,
+        39005,
+        1
+      ],
+      [
+        1794053130,
+        40705,
+        1
+      ]
+    ],
+    "main": {
+      "path": "C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555.jsonl",
+      "summary": {
+        "badLines": 0,
+        "base": 30005,
+        "cats": [
+          {
+            "cat": "base",
+            "count": 2,
+            "eq": 130512.90369824381,
+            "t": 60010,
+            "usd": 0.3900373073964876
+          },
+          {
+            "cat": "read",
+            "count": 4,
+            "eq": 32230.718297820276,
+            "t": 14900,
+            "usd": 0.11987284203863312
+          },
+          {
+            "cat": "user",
+            "count": 1,
+            "eq": 199.98876530726886,
+            "t": 100,
+            "usd": 0.00039997753061453775
+          },
+          {
+            "cat": "compact",
+            "count": 1,
+            "eq": 18898.846301756184,
+            "t": 9000,
+            "usd": 0.03779769260351237
+          },
+          {
+            "cat": "output",
+            "count": 6,
+            "eq": 7540.371972336911,
+            "t": 900,
+            "usd": 0.02641197203110637
+          },
+          {
+            "cat": "thinking",
+            "count": 6,
+            "eq": 2513.457324112304,
+            "t": 300,
+            "usd": 0.008803990677035457
+          }
+        ],
+        "events": [
+          {
+            "cost": 58504.75,
+            "extra": 0,
+            "kind": "coldStart",
+            "req": 0,
+            "tokens": 30005,
+            "ts": 1794045600
+          },
+          {
+            "cause": "expired",
+            "cost": 81653.47412255952,
+            "extra": 6000,
+            "kind": "cacheBroken",
+            "req": 3,
+            "tokens": 41876,
+            "ts": 1794052809
+          },
+          {
+            "cause": "modelChanged",
+            "cost": 82219.53807437366,
+            "extra": 11,
+            "kind": "cacheBroken",
+            "req": 4,
+            "tokens": 43276,
+            "ts": 1794052825
+          },
+          {
+            "cost": 74104.49999999999,
+            "extra": 9000,
+            "kind": "compaction",
+            "req": 5,
+            "tokens": 44600,
+            "ts": 1794053100
+          }
+        ],
+        "firstTs": 1794045600,
+        "lastContext": 40705,
+        "lastTs": 1794053130,
+        "maxContext": 44505,
+        "models": [
+          "claude-opus-5-5",
+          "claude-sonnet-5-5"
+        ],
+        "requests": 7,
+        "shrink": 0,
+        "top": [
+          {
+            "cat": "read",
+            "detail": "x.rs",
+            "eq": 22215.192765349835,
+            "n": 3,
+            "r": 0.06666666666666667,
+            "req": 1,
+            "rereads": 3,
+            "t": 10100,
+            "tool": "Read",
+            "ts": 1794045605,
+            "usd": 0.08684077106139933,
+            "w": 1.999524036173251
+          },
+          {
+            "cat": "compact",
+            "detail": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz…",
+            "eq": 18898.846301756184,
+            "n": 1,
+            "r": 0.1,
+            "req": 5,
+            "rereads": 1,
+            "t": 9000,
+            "ts": 1794053110,
+            "usd": 0.03779769260351237,
+            "w": 1.9998718113062426
+          },
+          {
+            "cat": "read",
+            "detail": "y.rs",
+            "eq": 4510.6340956340955,
+            "n": 2,
+            "r": 0.075,
+            "req": 2,
+            "rereads": 2,
+            "t": 2100,
+            "tool": "Read",
+            "ts": 1794046805,
+            "usd": 0.017622536382536382,
+            "w": 1.9979209979209978
+          },
+          {
+            "cat": "read",
+            "detail": "z.rs",
+            "eq": 2309.8758605123576,
+            "n": 1,
+            "r": 0.1,
+            "req": 3,
+            "rereads": 1,
+            "t": 1100,
+            "tool": "Read",
+            "ts": 1794052809,
+            "usd": 0.00901950344204943,
+            "w": 1.999887145920325
+          },
+          {
+            "cat": "read",
+            "detail": "w.rs",
+            "eq": 3195.0155763239877,
+            "n": 0,
+            "r": 0.0,
+            "req": 6,
+            "rereads": 0,
+            "t": 1600,
+            "tool": "Read",
+            "ts": 1794053130,
+            "usd": 0.006390031152647975,
+            "w": 1.9968847352024923
+          }
+        ],
+        "usage": {
+          "cache1h": 172300,
+          "cache5m": 0,
+          "cacheCreate": 172300,
+          "cacheRead": 109600,
+          "input": 35,
+          "output": 1500,
+          "thinking": 375
+        }
+      },
+      "who": {
+        "agentType": null,
+        "description": null
+      }
+    },
+    "origins": [
+      {
+        "cat": "read",
+        "eq": 22215.192765349835,
+        "key": "read|C--proj-a|x.rs",
+        "label": "x.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 10100,
+        "usd": 0.08684077106139933
+      },
+      {
+        "cat": "read",
+        "eq": 4510.6340956340955,
+        "key": "read|C--proj-a|y.rs",
+        "label": "y.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 2100,
+        "usd": 0.017622536382536382
+      },
+      {
+        "cat": "read",
+        "eq": 2309.8758605123576,
+        "key": "read|C--proj-a|z.rs",
+        "label": "z.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 1100,
+        "usd": 0.00901950344204943
+      },
+      {
+        "cat": "read",
+        "eq": 3195.0155763239877,
+        "key": "read|C--proj-a|w.rs",
+        "label": "w.rs",
+        "n": 1,
+        "project": "C--proj-a",
+        "t": 1600,
+        "usd": 0.006390031152647975
+      },
+      {
+        "cat": "reminder",
+        "eq": 1417.7667236954662,
+        "key": "reminder|mcp_instructions_delta",
+        "label": "mcp_instructions_delta",
+        "n": 1,
+        "project": "",
+        "t": 1013,
+        "usd": 0.005671066894781865
+      }
+    ],
+    "subagents": [
+      {
+        "path": "C:\\Users\\demo\\.claude\\projects\\C--proj-a\\11111111-2222-3333-4444-555555555555\\subagents\\agent-a1.jsonl",
+        "summary": {
+          "badLines": 0,
+          "base": 12470,
+          "cats": [
+            {
+              "cat": "base",
+              "count": 1,
+              "eq": 18081.0,
+              "t": 12470,
+              "usd": 0.07232399999999999
+            },
+            {
+              "cat": "read",
+              "count": 13,
+              "eq": 1947.8001845535764,
+              "t": 1496,
+              "usd": 0.007791200738214304
+            },
+            {
+              "cat": "reminder",
+              "count": 1,
+              "eq": 1417.7667236954665,
+              "t": 1013,
+              "usd": 0.005671066894781864
+            },
+            {
+              "cat": "output",
+              "count": 4,
+              "eq": 8970.322923812775,
+              "t": 1091,
+              "usd": 0.0358812916952511
+            },
+            {
+              "cat": "thinking",
+              "count": 4,
+              "eq": 2376.764247906137,
+              "t": 355,
+              "usd": 0.009507056991624548
+            }
+          ],
+          "events": [
+            {
+              "cost": 14963.499999999998,
+              "extra": 0,
+              "kind": "coldStart",
+              "req": 0,
+              "tokens": 12470,
+              "ts": 1793767693
+            }
+          ],
+          "firstTs": 1793767693,
+          "lastContext": 16425,
+          "lastTs": 1793767708,
+          "maxContext": 16425,
+          "models": [
+            "claude-opus-5-5"
+          ],
+          "requests": 5,
+          "shrink": 0,
+          "top": [
+            {
+              "cat": "reminder",
+              "eq": 1417.7667236954662,
+              "n": 3,
+              "r": 0.05000000000000002,
+              "req": 1,
+              "rereads": 3,
+              "t": 1013,
+              "tool": "mcp_instructions_delta",
+              "ts": 1793767695,
+              "usd": 0.005671066894781865,
+              "w": 1.2495722840034218
+            }
+          ],
+          "usage": {
+            "cache1h": 0,
+            "cache5m": 16423,
+            "cacheCreate": 16423,
+            "cacheRead": 56090,
+            "input": 10,
+            "output": 1892,
+            "thinking": 383
+          }
+        },
+        "who": {
+          "agentType": "Explore",
+          "description": "buscar"
+        }
+      }
+    ]
+  }
+}

@@ -5,11 +5,55 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
 ### Added
 - **Automatic updates** from the GitHub releases (installed version): checks at startup and every 6 hours, shows a notice in the
   top bar with the release notes, and *Update* downloads the installer, verifies its signature, installs it and restarts
   Orchestra, warning first if agents are working or SSH sessions are open. Settings → General: turn the automatic check off or
   *Check now*. The portable exe only offers to open the download page.
+- **MCP view** (top bar → MCP): one table with every MCP server of every account (Claude user and local scopes, Codex, opencode).
+  Test servers and see their tools or why they fail; install one in several accounts at once from a form or a command pasted from a
+  README; compare two versions of the same server and make the others equal to one; remove it; approve, turn on or sign in where an
+  account needs it. Every change shows the exact edit first and the last one can be undone. Each server shows roughly how many
+  tokens its tool definitions add to every session.
+- **Consumption view** (top bar → Consumption): where Claude Code tokens go, computed locally from the transcripts, by period
+  (today, 7 or 30 days), session, project, model and subagent, in input-token equivalents or estimated USD. A drawer per pane shows
+  the current session. Advice cards rank the biggest wastes with the saving as "before → after" and the assumption behind it.
+- **Copy report for your AI**: a Markdown summary of the consumption analysis to paste into a chat, also available to agents as the
+  read-only MCP tool **`usage_report`**.
+- **Paste images into terminals**: `Ctrl+V` / right click with an image in the clipboard, or drop image files on a pane. Local
+  panes get the path of a PNG saved in a cache folder (cleaned after 24 hours, 25 MB limit); SSH panes upload it to
+  `~/.cache/orchestra-paste/` on the server first and get the remote path.
+- **Reliable copy**: copying goes through the system clipboard (Rust, with the browser API as fallback) and always shows a
+  *Copied (N)* notice or the error. Works in apps that capture the mouse (hold `Shift` to select; a hint says so), with right
+  click on a selection, and with OSC 52 sent by remote apps (write only, 1 MiB limit).
+- **Visible SSH reconnection**: a dropped pane is veiled with its state (reconnecting, attempt N, countdown; or gave up and why:
+  login rejected, host key, refused, timeout, unreachable) with *Restart* / *Close*, and a separator in the terminal marks when it
+  came back and how long it was down.
+- **Need attention**: `Ctrl+Shift+A` jumps to the next agent waiting for you, across tabs; a sidebar block lists them all. When the
+  window is not in front, Orchestra flashes the taskbar and can show a Windows notification.
+- **Files drawer (SFTP)** per SSH host: browse, filter, hidden files, upload (button or drop), download, new folder, rename, delete,
+  with progress and cancel. Own SFTP v3 client over the same `ssh.exe` (keys, vault, jump host, strict host-key checking).
+- **Port forwarding**: ports announced in an SSH pane's output (for example a dev server on `localhost:3000`) offer *Forward* /
+  *Open in browser* / *Ignore*; the ports chip lists tunnels (open, copy URL, keep for every connection, stop). One `ssh -N` per
+  tunnel bound to `127.0.0.1`, reconnects with backoff and keeps the same local port; another one is picked if it is busy.
+- Release tooling: `scripts/release.mjs` (version bump, signed build, `latest.json`, the `gh release create` line),
+  `bump-version.mjs` and `latest-json.mjs` with tests; process in `docs/dev-notes/actualizaciones.md`.
+
+### Fixed
+- `Ctrl+Shift+C` with nothing selected no longer empties the clipboard, and copy errors are no longer silently lost.
+- Auto-compact no longer types `/compact` over a prompt that has unsent text, and Settings → Agents now explains why it is not
+  acting on each running agent.
+
+### Known limitations / not yet tested on real hardware
+- 0.2.0 and 0.3.0 do not include the updater: install 0.4.0 by hand once; from then on updates are offered automatically.
+- Tested with unit tests, fake servers, a local sshd and the browser demo, but not yet in the real window against real servers:
+  the Files drawer (SFTP) from the interface, port-forwarding tunnels in the app window, uploading a pasted image over SSH, a
+  real network drop during reconnection, the Windows notification and taskbar flash, and Codex with these features.
+- If Orchestra is killed abruptly (crash, Task Manager), the helper `ssh` processes of tunnels, SFTP and server metrics can be left
+  running.
+- Clicking the Windows notification does not focus the pane. Uploads over SFTP with Windows' `ssh.exe` are slow (about 12 MB/s).
 
 ## [0.3.0] - 2026-11-07
 

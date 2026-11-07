@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SAFETY_MIN, compactKey, compactWindow, decideCompact, pushLog } from './autocompact.ts';
+import { SAFETY_MIN, classifyInput, compactKey, compactWindow, decideCompact, nextDraft, parseDevOverride, pushLog } from './autocompact.ts';
 import type { CompactInput } from './autocompact.ts';
 
 const NOW = 1_000_000;
@@ -55,7 +55,7 @@ test('window follows the cache TTL (5 min cache: never reaches 50 min)', () => {
   assert.deepEqual(compactWindow(50, 0), { from: 50, to: 57 });
   const d = decideCompact(base({}, { cacheTtl: 300, lastRequestAt: NOW - 51 * 60 }));
   assert.equal(d.compact, false);
-  assert.equal(d.reason, 'too-late');
+  assert.equal(d.reason, 'ttl-too-short');
 });
 
 test('user idle edge: exactly the threshold counts as away', () => {
@@ -84,4 +84,59 @@ test('pushLog keeps the latest 20, newest first', () => {
   assert.equal(log.length, 20);
   assert.equal(log[0].title, 't24');
   assert.equal(log[19].title, 't5');
+});
+
+test('ttl-too-short: an empty window [afterMin, ttl-3) is reported at any time, not as too-early/too-late', () => {
+  // Caché de 5 min: la ventana va de 50 a 2 min, vacía.
+  for (const m of [1, 4, 30, 55]) {
+    assert.equal(decideCompact(base({}, { cacheTtl: 300, lastRequestAt: NOW - m * 60 })).reason, 'ttl-too-short', `min ${m}`);
+  }
+  // Borde: from == to también está vacía.
+  assert.equal(decideCompact(base({ afterMin: 57 }, { cacheTtl: 3600 })).reason, 'ttl-too-short');
+  // Con una ventana de verdad (afterMin 1, caché 5 min = [1, 2)) sí actúa.
+  assert.equal(decideCompact(base({ afterMin: 1 }, { cacheTtl: 300, lastRequestAt: NOW - 90 })).compact, true);
+});
+
+test('user-typed: a pending draft in the prompt blocks compacting', () => {
+  const lr = NOW - 55 * 60;
+  const typed = nextDraft(undefined, 'borrador', (lr + 60) * 1000);
+  assert.equal(decideCompact(base({ draft: typed })).reason, 'user-typed');
+  // Escrito MIENTRAS el agente trabajaba (antes de lastRequestAt): sigue en el prompt y también bloquea.
+  const early = nextDraft(undefined, 'a medias', (lr - 30) * 1000);
+  assert.equal(decideCompact(base({ draft: early })).reason, 'user-typed');
+  // Se comprueba antes de consultar la inactividad del sistema.
+  assert.equal(decideCompact(base({ draft: typed, userIdleSec: null })).reason, 'user-typed');
+});
+
+test('user-typed: the Enter that sent the message, or Ctrl+C, leaves the prompt empty', () => {
+  const lr = NOW - 55 * 60;
+  let d = nextDraft(undefined, 'hola', (lr - 5) * 1000);
+  d = nextDraft(d, '\r', (lr - 4) * 1000);
+  assert.deepEqual(d, { draft: false, lastInputAt: (lr - 4) * 1000 });
+  assert.equal(decideCompact(base({ draft: d })).compact, true);
+  // Un Enter de más sobre el prompt vacío después de la respuesta: tampoco hay borrador.
+  assert.equal(decideCompact(base({ draft: nextDraft(d, '\r', (lr + 10) * 1000) })).compact, true);
+  // Pegar con Enter final en el mismo trozo = enviado.
+  assert.equal(nextDraft(undefined, 'texto pegado\r', 1).draft, false);
+  // Ctrl+C vacía el prompt de Claude.
+  assert.equal(nextDraft(nextDraft(undefined, 'xx', 1), '\x03', 2).draft, false);
+});
+
+test('classifyInput: terminal replies and a lone Esc are noise and keep the previous state', () => {
+  for (const n of ['\x1b[I', '\x1b[O', '\x1b[<0;10;5M', '\x1b[<0;10;5m', '\x1b[12;40R', '\x1b[?1;2c', '\x1b[>0;276;0c', '\x1b]11;rgb:0000/0000/0000\x07', '\x1b]10;rgb:ffff/ffff/ffff\x1b\\', '\x1b']) {
+    assert.equal(classifyInput(n), 'noise', JSON.stringify(n));
+  }
+  const d = nextDraft(undefined, 'x', 5);
+  assert.deepEqual(nextDraft(d, '\x1b[O', 99), d);
+  assert.deepEqual(nextDraft(undefined, '\x1b[I', 9), { draft: false, lastInputAt: 0 });
+  for (const t of ['a', '\x7f', '\x1b[A', '\x1b[200~pegado\x1b[201~', 'ñ']) assert.equal(classifyInput(t), 'typing', JSON.stringify(t));
+  assert.equal(classifyInput('\r'), 'submit');
+  assert.equal(classifyInput('\x03'), 'clear');
+});
+
+test('parseDevOverride: seconds to minutes, ignores junk, null when empty', () => {
+  assert.equal(parseDevOverride(undefined), null);
+  assert.equal(parseDevOverride(''), null);
+  assert.equal(parseDevOverride('foo=1,ctxK=abc'), null);
+  assert.deepEqual(parseDevOverride('ctxK=1, afterSec=30,idleSec=0'), { ctxK: 1, afterMin: 0.5, userIdleMin: 0 });
 });
