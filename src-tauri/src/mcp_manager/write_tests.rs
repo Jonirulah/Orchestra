@@ -159,7 +159,8 @@ fn plan_shows_exact_commands_without_secrets() {
     let change = Change::Add { def: stdio_input("github"), targets: ids(&h), replace: true };
     let steps = plan(&env, &change, &no_source).unwrap();
     assert_eq!(steps[0].public.action, "replace");
-    let cdir = h.join(".claude-a").display().to_string();
+    // Con show_arg: en el runner de CI la ruta lleva «~» (RUNNER~1) y va entre comillas.
+    let cdir = show_arg(&h.join(".claude-a").display().to_string());
     assert_eq!(steps[0].public.lines[0], format!("CLAUDE_CONFIG_DIR={cdir} claude mcp remove github --scope user"));
     assert_eq!(
         steps[0].public.lines[1],
@@ -171,7 +172,7 @@ fn plan_shows_exact_commands_without_secrets() {
         steps[1].public.lines,
         [format!(
             "CODEX_HOME={} codex mcp add github --env GITHUB_TOKEN=••• -- npx -y @modelcontextprotocol/server-github 'a b'",
-            h.join(".codex-b").display()
+            show_arg(&h.join(".codex-b").display().to_string())
         )]
     );
     // Lo que se ejecuta sí lleva el valor real; lo que se enseña, nunca.
@@ -189,7 +190,7 @@ fn plan_shows_exact_commands_without_secrets() {
     // Quitar: Claude y Codex lo tienen; opencode no; local de Claude no se toca.
     let steps = plan(&env, &Change::Remove { name: "github".into(), targets: ids(&h), include_local: false }, &no_source).unwrap();
     assert_eq!(steps.iter().map(|s| s.public.action).collect::<Vec<_>>(), ["remove", "remove", "skip"]);
-    assert_eq!(steps[1].public.lines, [format!("CODEX_HOME={} codex mcp remove github", h.join(".codex-b").display())]);
+    assert_eq!(steps[1].public.lines, [format!("CODEX_HOME={} codex mcp remove github", show_arg(&h.join(".codex-b").display().to_string()))]);
     let steps = plan(&env, &Change::Remove { name: "onlylocal".into(), targets: ids(&h)[..1].to_vec(), include_local: false }, &no_source).unwrap();
     assert!(steps[0].public.note.as_deref().unwrap().contains("local"));
     assert!(codex_toml_has("[mcp_servers.\"dotted.name\"]\n", "dotted.name"));
