@@ -1,7 +1,7 @@
 export default {
   // Ajustes -> MCP (SettingsMcp.svelte). Los textos del backend (info.warning, info.error, tool/target de la auditoría) se muestran tal cual.
   'settings.mcp.enableLabel': 'Dejar que los agentes vean mis hosts y terminales',
-  'settings.mcp.enableHint': 'Ejecuta un servidor MCP local (solo en este equipo, protegido por un token secreto). Los terminales de Claude abiertos desde Orchestra se conectan a él automáticamente. Por ahora los agentes solo pueden leer, y únicamente en los hosts donde lo hayas permitido en los ajustes del host. Lo que lee un agente es lo que haya en la pantalla de ese terminal, incluida cualquier contraseña o clave que se haya impreso ahí: Orchestra no puede filtrarlo.',
+  'settings.mcp.enableHint': 'Ejecuta un servidor MCP local (solo en este equipo, protegido por un token secreto). Los terminales de Claude abiertos desde Orchestra se conectan a él automáticamente. Los agentes pueden leer terminales y, en los hosts con Preguntar o Total, ejecutar comandos (Preguntar: apruebas cada uno; Total: sin preguntar). No hay nada disponible en los hosts que no hayas permitido en los ajustes del host. Lo que lee un agente es lo que haya en la pantalla de ese terminal, incluida cualquier contraseña o clave que se haya impreso ahí: Orchestra no puede filtrarlo.',
   'settings.mcp.statusLabel': 'Estado',
   'settings.mcp.statusOff': 'Desactivado. Los terminales de Claude nuevos arrancan sin él.',
   // HTML estático y de confianza (se pinta con {@html}): solo <code>; {port} es un número.
@@ -29,7 +29,7 @@ export default {
   'settings.mcp.notRunningToast': 'El servidor MCP no está en marcha: actívalo primero.',
   'settings.mcp.regenerated': 'Token nuevo creado. Las sesiones de Claude que ya están abiertas siguen con el antiguo: reinícialas para que se reconecten.',
   'settings.mcp.activityLabel': 'Actividad',
-  'settings.mcp.activityHint': 'Las últimas 50 peticiones de los agentes (las más recientes primero). El contenido de los terminales nunca se escribe en este registro.',
+  'settings.mcp.activityHint': 'Las últimas 50 peticiones de los agentes (las más recientes primero). El contenido de los terminales nunca se escribe en este registro. De los comandos guarda el texto y los primeros 2 KB de su salida.',
   'settings.mcp.colTime': 'Hora',
   'settings.mcp.colTool': 'Herramienta',
   'settings.mcp.colTarget': 'Destino',
@@ -37,5 +37,8 @@ export default {
   'settings.mcp.colSize': 'Tamaño',
   'settings.mcp.resultDenied': 'Denegado',
   'settings.mcp.resultAllowed': 'Permitido',
+  'settings.mcp.resultApproved': 'Aprobado',
+  'settings.mcp.resultAuto': 'Ejecutado (Total)',
+  'settings.mcp.resultExpired': 'Caducado',
   'settings.mcp.activityEmpty': 'Aún no hay actividad.',
 } as const;

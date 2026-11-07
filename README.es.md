@@ -12,7 +12,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="Licencia: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Plataforma: Windows" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4.svg">
-  <img alt="Versión 0.1.0" src="https://img.shields.io/badge/version-0.1.0-orange.svg">
+  <img alt="Versión 0.2.0" src="https://img.shields.io/badge/version-0.2.0-orange.svg">
 </p>
 
 Orchestra coloca tus terminales en una cuadrícula ajustable a la derecha y, a la izquierda, una barra lateral con tus cuentas de
@@ -73,7 +73,7 @@ Tauri 2 (Rust), Svelte 5 y xterm.js: un ejecutable de unos 10 MB, sin Electron.
 - Política de selección de cuenta (manual, por turnos, reinicio más cercano, más cuota libre) y **autocompactado** opcional mientras
   estás ausente (escribe `/compact` en un Claude inactivo poco antes de que caduque su caché del prompt; experimental).
 - Un **servidor MCP** local permite que los agentes vean los hosts y terminales que permitas expresamente (permiso por host,
-  registro de auditoría). Solo lectura en esta versión.
+  registro de auditoría). El acceso por host es `read` (los agentes leen terminales), `ask` (también pueden ejecutar un comando con `run_command`, pero solo tras aprobar tú ese comando exacto en un diálogo) o `full` (ejecutan comandos sin preguntar). Cada intento queda auditado.
 
 **Barra de estado**
 - Una barra fina abajo: nombre del equipo, CPU, RAM, lectura/escritura de disco, red de bajada/subida, tiempo encendido, agentes
@@ -111,7 +111,7 @@ Descarga los archivos desde la página de [Releases](../../releases). Hay dos op
 
 | Archivo | Qué es |
 |---|---|
-| `Orchestra_0.1.0_x64-setup.exe` | Instalador NSIS, **por usuario** (sin permisos de administrador), en inglés / español. |
+| `Orchestra_0.2.0_x64-setup.exe` | Instalador NSIS, **por usuario** (sin permisos de administrador), en inglés / español. |
 | `Orchestra.exe` | Ejecutable portátil (unos 10 MB). Ponlo donde quieras y ejecútalo. |
 
 Notas:
@@ -184,7 +184,7 @@ Orchestra se ejecuta con los permisos de tu usuario y solo habla con `127.0.0.1`
 - **Las contraseñas y frases de paso SSH** van al Administrador de credenciales de Windows; ningún comando las devuelve a la interfaz.
 - **Las credenciales de Claude / Codex / opencode nunca se copian ni se modifican.** Por defecto Orchestra no lee los tokens OAuth de
   Claude; solo lo hace la consulta de uso opcional (dos campos de `.credentials.json`, que nunca se guardan ni se registran).
-- El **servidor MCP** escucha solo en `127.0.0.1`, protegido por un token secreto, y solo expone los hosts y terminales que permitas.
+- El **servidor MCP** escucha solo en `127.0.0.1`, protegido por un token secreto, y solo expone los hosts y terminales que permitas. La herramienta `run_command` es la única que puede cambiar algo: los hosts `read` la rechazan, los `ask` necesitan tu aprobación cada vez y los `full` la ejecutan directamente (mira [docs/SECURITY.md](docs/SECURITY.md)).
 - Las copias de seguridad y los hosts exportados **no contienen secretos**; una copia importada se trata como dato no fiable y se
   valida.
 
@@ -239,7 +239,7 @@ docs/                 Arquitectura, seguridad, i18n, guía de usuario, contribuc
 
 ## Estado y limitaciones conocidas
 
-Orchestra 0.1.0 es la primera versión pública y es un proyecto de una sola persona. Qué está verificado y qué no:
+Orchestra 0.2.0 (la 0.1.0 fue la primera versión pública) es un proyecto de una sola persona. Novedad de la 0.2.0: la herramienta MCP `run_command`, cubierta por pruebas automáticas con un ejecutor falso y procesos locales reales, pero que el autor **no** ha probado aún contra un servidor SSH real. Qué está verificado y qué no:
 
 - **Verificado con pruebas automáticas**: modelo de la cuadrícula, ajustes, políticas de cuentas, formato de uso, decisión de
   autocompactado, importación de temas, copia de seguridad, diccionarios de i18n (TypeScript); PTY, analizador de `~/.ssh/config`,
@@ -255,7 +255,7 @@ Orchestra 0.1.0 es la primera versión pública y es un proyecto de una sola per
 - **El instalador no se ha probado instalándolo** en un equipo limpio, y **la CI nunca se ha ejecutado** (el flujo existe pero aún
   no se ha lanzado en GitHub).
 - **Solo Windows.** No hay versión para macOS ni Linux.
-- **No incluido**: SFTP / transferencia de archivos, escritura por MCP (teclear en terminales), túneles, snippets y difusión,
+- **No incluido**: SFTP / transferencia de archivos, teclear en terminales por MCP y transferencia de archivos (solo existe `run_command`), túneles, snippets y difusión,
   barras de uso para Codex / opencode. Los paneles SSH no muestran la etiqueta de git; las métricas remotas son solo para Linux; las
   sesiones de Codex / opencode solo se detectan por el nombre del proceso (sin tokens ni datos de sesión).
 - Los comentarios del código, `docs/DISENO.md` y los archivos de `docs/dev-notes/` están en gran parte en español.

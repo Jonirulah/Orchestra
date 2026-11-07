@@ -12,7 +12,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4.svg">
-  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-orange.svg">
+  <img alt="Version 0.2.0" src="https://img.shields.io/badge/version-0.2.0-orange.svg">
 </p>
 
 Orchestra puts your terminals in an adjustable grid on the right and, on the left, a sidebar with your Claude / Codex / opencode
@@ -71,8 +71,9 @@ xterm.js: an executable of about 10 MB, no Electron.
   focus the terminal. **Subagent viewer**: a read-only drawer that follows a subagent's transcript live.
 - Account selection policy (manual, round-robin, soonest reset, most free quota) and optional **auto-compact** while you are away
   (types `/compact` into an idle Claude shortly before its prompt cache expires; experimental).
-- A local **MCP server** lets agents see the hosts and terminals you explicitly allow (per-host permission, audit log). Read-only
-  in this version.
+- A local **MCP server** lets agents see the hosts and terminals you explicitly allow (per-host permission, audit log). Access per host is
+  `read` (agents read terminals), `ask` (they can also run a command with `run_command`, but only after you approve that exact
+  command in a dialog) or `full` (they run commands without asking). Every attempt is audited.
 
 **Status bar**
 - A thin bar at the bottom: hostname, CPU, RAM, disk read/write, network down/up, uptime, working / waiting agents and the highest
@@ -105,7 +106,7 @@ Get the files from the [Releases](../../releases) page. Two options:
 
 | File | What it is |
 |---|---|
-| `Orchestra_0.1.0_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
+| `Orchestra_0.2.0_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
 | `Orchestra.exe` | Portable executable (about 10 MB). Put it anywhere and run it. |
 
 Notes:
@@ -175,7 +176,7 @@ Orchestra runs with your user's permissions and talks only to `127.0.0.1` and to
 - **SSH passwords and passphrases** go to the Windows Credential Manager; no command returns them to the UI.
 - **Claude / Codex / opencode credentials are never copied or modified.** By default Orchestra does not read Claude's OAuth tokens;
   only the opt-in usage query does (two fields of `.credentials.json`, never stored or logged).
-- The **MCP server** listens on `127.0.0.1` only, behind a secret token, and only exposes hosts and terminals you allow.
+- The **MCP server** listens on `127.0.0.1` only, behind a secret token, and only exposes hosts and terminals you allow. The `run_command` tool is the only one that can change anything: `read` hosts refuse it, `ask` hosts need your approval each time, `full` hosts run it directly (see [docs/SECURITY.md](docs/SECURITY.md)).
 - Backups and exported hosts contain **no secrets**; an imported backup is treated as untrusted data and validated.
 
 Full model, per feature: [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
@@ -228,7 +229,7 @@ Documentation index: [docs/README.md](docs/README.md).
 
 ## Status and known limitations
 
-Orchestra 0.1.0 is the first public release and is a one-person project. What is verified and what is not:
+Orchestra 0.2.0 (0.1.0 was the first public release) is a one-person project. New in 0.2.0: the MCP `run_command` tool, which is covered by automated tests with a fake runner and real local processes but has **not** been run against a real SSH server by the author yet. What is verified and what is not:
 
 - **Verified by automated tests**: grid model, settings, account policies, usage formatting, auto-compact decision, theme import,
   backup, i18n dictionaries (TypeScript); PTY, `~/.ssh/config` parser, token accounting, MCP protocol and security checks, askpass
@@ -241,7 +242,7 @@ Orchestra 0.1.0 is the first public release and is a one-person project. What is
 - **The installer has not been install-tested** on a clean machine, and **CI has never run** (the workflow exists but has not been
   executed on GitHub yet).
 - **Windows only.** No macOS or Linux build.
-- **Not included**: SFTP / file transfer, MCP write access (typing into terminals), tunnels, snippets and broadcast, usage bars for
+- **Not included**: SFTP / file transfer, MCP typing into terminals and file transfer (only `run_command` exists), tunnels, snippets and broadcast, usage bars for
   Codex / opencode. SSH panes do not show the git chip; remote metrics are Linux-only; Codex / opencode sessions are only detected by
   process name (no tokens or session data).
 - Code comments, `docs/DISENO.md` and the files in `docs/dev-notes/` are largely in Spanish.

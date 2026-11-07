@@ -415,6 +415,13 @@ export interface McpInfo {
 export interface McpAuditEntry {
   ts: string; tool: string; target: string | null; host: string | null;
   outcome: 'allowed' | 'denied'; bytes: number; reason: string | null;
+  /** Solo run_command. */
+  mode?: string; decision?: 'auto' | 'approved' | 'denied' | 'expired'; command?: string;
+  exit_code?: number; duration_ms?: number; output_head?: string;
+}
+/** Un agente pide ejecutar `command` en un host con acceso `ask`: la interfaz debe contestar con `mcpApprovalAnswer`. */
+export interface McpApprovalReq {
+  id: string; host: string; address: string; command: string; timeoutSecs: number; expiresInSecs: number;
 }
 const mcpOff = (enabled: boolean): McpInfo => ({ enabled, running: false, port: null, url: null, error: 'Not available in the browser demo', configPath: '' }); // i18n-ignore: demo data, only outside Tauri (dev browser)
 
@@ -432,6 +439,16 @@ export async function mcpRegenerateToken(): Promise<McpInfo> {
 }
 export async function mcpSync(snapshot: unknown): Promise<void> {
   if (inTauri) await invoke('mcp_sync', { snapshot });
+}
+export async function mcpApprovalAnswer(id: string, approve: boolean): Promise<boolean> {
+  return inTauri ? invoke<boolean>('mcp_approval_answer', { id, approve }) : false;
+}
+/** Peticiones de aprobación (`mcp-approval`) y su caducidad (`mcp-approval-end`). Sin Tauri no hay ninguna. */
+export async function onMcpApproval(onReq: (r: McpApprovalReq) => void, onEnd: (id: string) => void): Promise<UnlistenFn> {
+  if (!inTauri) return () => {};
+  const a = await listen<McpApprovalReq>('mcp-approval', (e) => onReq(e.payload));
+  const b = await listen<string>('mcp-approval-end', (e) => onEnd(e.payload));
+  return () => { a(); b(); };
 }
 export async function mcpAudit(limit: number): Promise<McpAuditEntry[]> {
   return inTauri ? invoke<McpAuditEntry[]>('mcp_audit', { limit }) : [];

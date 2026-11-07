@@ -12,7 +12,7 @@ request to `api.anthropic.com` per signed-in account when you turn it on.
 | SSH passwords / passphrases | Windows Credential Manager, service `dev.orchestra.app` | Write-only from the UI: no command returns a secret to the frontend. |
 | Usage snapshots | `…\quota\<account>.json` (+ `.raw.txt`, `.query-raw.txt`) | Percentages and reset times only. `.query-raw.txt` is the body of the last usage-query answer (max 4 KB, never the token). |
 | MCP token and client config | `…\mcp\token`, `…\mcp\claude-mcp.json` | Plain text, but both files and the `mcp` folder are restricted to your Windows user with `icacls` (inheritance removed). If that fails, Settings → MCP shows a warning and the files keep the inherited permissions. |
-| MCP audit log | `…\mcp\audit.jsonl` | One line per agent call; rotated at 1 MB. |
+| MCP audit log | `…\mcp\audit.jsonl` | One line per agent call; rotated at 1 MB. For `run_command` it also holds the command and the first 2 KB of its output. |
 | Last Claude session per pane | in `state.json` (`lastSession`: session UUID + account folder) | Not secret. Only used to build `claude --resume <id>` on restart (see below). |
 | Claude credentials | untouched | Orchestra never writes Claude's files. By default it never reads OAuth tokens either (only the identity block of `.claude.json`). The one exception is the opt-in usage query below. |
 
@@ -39,18 +39,53 @@ Transport and authentication:
 
 What agents can see:
 
-- Access is **per host** (`none` by default, also for hosts saved before the setting existed). `ask` and `full` behave as `read`
-  for now. Read-only tools only. Local shells and agent (Claude/Codex) terminals are hidden unless you enable "Expose local
+- Access is **per host** (`none` by default, also for hosts saved before the setting existed): `read` lets an agent list the host
+  and read its terminals; `ask` and `full` add the `run_command` tool (below). The other tools are read-only. Local shells and agent (Claude/Codex) terminals are hidden unless you enable "Expose local
   terminals"; with it on, an agent can read another agent's terminal.
 - The permission is checked again after the output is taken from the terminal, so lowering a host's access while a read is in
   flight cannot leak that read. The frontend publishes changes with a 300 ms debounce: a change can take up to ~0.3 s to apply.
-- Responses never contain credentials, key paths or jump hosts: the snapshot is a fixed whitelist of fields.
+- Responses never contain credentials, key paths or jump hosts: every response is built field by field. (For hosts at `ask`/`full`
+  the interface sends the backend the key path, jump host and the *name* of the vault entry so it can start `ssh`; they stay inside
+  the local process and are never returned over MCP.)
 - Host names, titles and tags can come from a remote machine or a config file and are **untrusted**: control, bidi and invisible
   characters are removed, lengths and counts are capped, and list results carry a notice that they are data. Terminal output is
   returned between per-call random-nonce markers (`<<<TERMINAL-OUTPUT-<nonce> …>>>` / `<<<END-TERMINAL-OUTPUT-<nonce>>>>`), so the
   text cannot forge the end marker, under a header saying it is untrusted data. ANSI/OSC sequences, C1 controls and invisible
   characters are stripped from it.
 - Every call, allowed or denied, is appended to `audit.jsonl`, JSON-escaped and sanitized, so a pane title cannot forge a line.
+
+### Running commands (`run_command`, since 0.2.0)
+
+`run_command(host, cmd, timeout_secs?)` runs ONE command on a saved host and returns stdout, stderr, exit code, a truncation flag and
+the duration. It is the only MCP tool that can change anything, so it is gated by the host's access level:
+
+| Level | What happens |
+|-------|--------------|
+| `none` | The host does not exist for agents. |
+| `read` | Refused with an error that names the mode and says you must raise it to `ask` or `full`. Nothing is run. |
+| `ask` | A dialog in Orchestra shows the host and the exact command. It runs only if you press *Run it*; *Deny*, Escape, a click outside or no answer within 120 s mean it is **not** run. The level and the host's address are checked again after you approve, so lowering the level while the dialog is open still blocks it. At most 5 approvals can be pending. |
+| `full` | Runs immediately, without asking. Use it only on hosts where a wrong command is acceptable. |
+
+How it runs and what limits it:
+
+- One `ssh` process per call, no terminal and no stdin, arguments as an array (no local shell). The command is passed to ssh as a
+  single argument and interpreted by the remote login shell. `StrictHostKeyChecking=yes` always: an unknown host key is never
+  accepted automatically (the error tells you to connect once with a normal terminal). Passwords and key passphrases come from the
+  vault through the same askpass helper as the terminals; the environment carries the *name* of the entry, never the secret, and
+  results never include credentials.
+- Commands are limited to 16 KB and must not contain control or invisible/bidi characters (so what you approve is what runs and
+  what is logged). Default timeout 60 s, maximum 600 s; on expiry the local `ssh` process is killed (a remote command that already
+  started may keep running on the server). Output is capped at 64 KB per stream; `truncated` tells the agent. At most 4 commands run
+  at the same time.
+- The output is **untrusted remote data**: ANSI/control/invisible characters are stripped, it is returned as JSON strings (it cannot
+  forge the end of a block) with a notice, and the tool and server descriptions tell the model not to follow instructions found in it.
+- **Audit**: every attempt (also refused, denied or expired ones) is appended to `audit.jsonl` with time, host, access mode,
+  decision (`auto`, `approved`, `denied`, `expired`), the command (first 2 KB), exit code, duration and the first 2 KB of the output
+  (not the full output). The file is in the restricted `mcp` folder and rotates at 1 MB. Note that the command text and that output
+  head can contain secrets if the command prints or contains them; the log is as sensitive as the terminals.
+- The approval dialog is a prompt-injection target too: it shows the command verbatim, but whether a command is harmless is your
+  call. Approving is the security boundary of `ask`. There is no "always allow".
+- What it does not do: it does not type into existing terminals, upload or download files, or open new terminals.
 
 Remaining limits:
 

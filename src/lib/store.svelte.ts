@@ -121,6 +121,8 @@ class AppState {
   private usageSettings = $state('');
   /** Estado del servidor MCP local (null = aún sin consultar). */
   mcp = $state<be.McpInfo | null>(null);
+  /** Comandos que un agente quiere ejecutar en hosts `ask`, a la espera de tu respuesta (el primero se muestra). */
+  mcpApprovals = $state<be.McpApprovalReq[]>([]);
   private mcpTimer: number | undefined;
   private mcpLast = '';
   private quotaTimer: number | undefined;
@@ -194,6 +196,10 @@ class AppState {
     }
     await this.prepareUsage();
     await this.applyMcp();
+    void be.onMcpApproval(
+      (r) => { if (!this.mcpApprovals.some((x) => x.id === r.id)) this.mcpApprovals = [...this.mcpApprovals, r]; },
+      (id) => { this.mcpApprovals = this.mcpApprovals.filter((x) => x.id !== id); },
+    );
     await this.resumeSavedSessions();
     if (!this.workspaces.length) {
       const ws = newWorkspace('Main', 2, 2);
@@ -536,6 +542,12 @@ class AppState {
   /** Archivo `--mcp-config` para los Claude nuevos (undefined = MCP apagado o sin servidor). */
   get mcpConfigPath(): string | undefined {
     return this.settings.mcpEnabled && this.mcp?.running && this.mcp.configPath ? this.mcp.configPath : undefined;
+  }
+
+  /** Respuesta a una petición de aprobación de `run_command`. Cerrar el diálogo sin contestar no existe: solo Denegar o Ejecutar. */
+  answerMcpApproval(id: string, approve: boolean): void {
+    this.mcpApprovals = this.mcpApprovals.filter((x) => x.id !== id);
+    void be.mcpApprovalAnswer(id, approve).catch(() => { /* ya había caducado */ });
   }
 
   /** Arranca o para el servidor según los ajustes y manda la instantánea. */

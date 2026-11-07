@@ -1,7 +1,7 @@
 export default {
   // Settings -> MCP (SettingsMcp.svelte). Backend strings (info.warning, info.error, audit tool/target) are shown as data.
   'settings.mcp.enableLabel': 'Let agents see my hosts and terminals',
-  'settings.mcp.enableHint': "Runs a local MCP server (this computer only, protected by a secret token). Claude terminals opened from Orchestra connect to it automatically. Agents can only read for now, and only on hosts where you allowed it in the host's settings. What an agent reads is whatever is on that terminal's screen, including any password or key that was printed there: Orchestra cannot filter that.",
+  'settings.mcp.enableHint': "Runs a local MCP server (this computer only, protected by a secret token). Claude terminals opened from Orchestra connect to it automatically. Agents can read terminals and, on hosts where you set Ask or Full, run commands (Ask: you approve each one; Full: no questions). Nothing is available on hosts you did not allow in the host's settings. What an agent reads is whatever is on that terminal's screen, including any password or key that was printed there: Orchestra cannot filter that.",
   'settings.mcp.statusLabel': 'Status',
   'settings.mcp.statusOff': 'Off. New Claude terminals start without it.',
   // Static trusted HTML (rendered with {@html}): only <code>; {port} is a number.
@@ -29,7 +29,7 @@ export default {
   'settings.mcp.notRunningToast': 'The MCP server is not running: turn it on first.',
   'settings.mcp.regenerated': 'New token created. Claude sessions that are already open still hold the old one: restart them to reconnect.',
   'settings.mcp.activityLabel': 'Activity',
-  'settings.mcp.activityHint': 'The last 50 requests from agents (newest first). Terminal contents are never written to this log.',
+  'settings.mcp.activityHint': 'The last 50 requests from agents (newest first). Terminal contents are never written to this log. For commands it keeps the command text and the first 2 KB of its output.',
   'settings.mcp.colTime': 'Time',
   'settings.mcp.colTool': 'Tool',
   'settings.mcp.colTarget': 'Target',
@@ -37,5 +37,8 @@ export default {
   'settings.mcp.colSize': 'Size',
   'settings.mcp.resultDenied': 'Denied',
   'settings.mcp.resultAllowed': 'Allowed',
+  'settings.mcp.resultApproved': 'Approved',
+  'settings.mcp.resultAuto': 'Run (Full)',
+  'settings.mcp.resultExpired': 'Expired',
   'settings.mcp.activityEmpty': 'No activity yet.',
 } as const;

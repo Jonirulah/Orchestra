@@ -1,6 +1,9 @@
 // Instantánea que Orchestra empuja al servidor MCP del backend. Módulo puro (sin Svelte ni Tauri).
 // Regla de oro: se construye COPIANDO CAMPOS UNO A UNO (lista blanca). Nunca se esparce un Host entero:
-// contraseñas, rutas de claves (identityFile), proxyJump, comandos y notas no salen de la interfaz.
+// contraseñas, comandos y notas no salen de la interfaz. Excepción acotada (run_command, v0.2.0): de un host con acceso `ask`/`full`
+// viajan al backend LOCAL los datos para lanzar `ssh` (ruta de la clave, salto y el NOMBRE de la entrada de la bóveda, nunca el
+// secreto). El backend no los devuelve nunca por MCP (list_hosts arma su respuesta campo a campo).
+import { activeSecretKey } from './model.ts';
 import type { AgentAccess, Host, Pane, Provider, Workspace } from './model.ts';
 
 export interface McpHost {
@@ -12,6 +15,12 @@ export interface McpHost {
   group?: string;
   tags: string[];
   agentAccess: AgentAccess;
+  /** Solo con acceso `ask`/`full`: cómo conectar para `run_command`. */
+  identity?: string;
+  identitiesOnly?: boolean;
+  jump?: string;
+  /** NOMBRE de la entrada de la bóveda (nunca el secreto). */
+  secretKey?: string;
 }
 
 export type McpPaneKind = 'ssh' | 'shell' | 'claude' | 'codex';
@@ -56,6 +65,14 @@ export function mcpHost(h: Host): McpHost {
   if (h.user) out.user = h.user;
   if (h.port) out.port = h.port;
   if (h.group) out.group = h.group;
+  if (out.agentAccess === 'ask' || out.agentAccess === 'full') {
+    const jump = h.proxyJump?.trim();
+    const sk = activeSecretKey(h);
+    if (h.identityFile) out.identity = h.identityFile;
+    if (h.authMethod === 'key' && h.identityFile) out.identitiesOnly = true;
+    if (jump) out.jump = jump;
+    if (sk) out.secretKey = sk;
+  }
   return out;
 }
 

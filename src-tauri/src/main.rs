@@ -7,6 +7,7 @@ mod git;
 mod hostkey;
 mod idle;
 mod mcp;
+mod mcp_exec;
 mod metrics;
 mod net;
 mod providers;
@@ -122,6 +123,7 @@ fn main() {
             mcp::mcp_regenerate_token,
             mcp::mcp_sync,
             mcp::mcp_audit,
+            mcp::mcp_approval_answer,
             metrics::metrics_sample,
             metrics::metrics_reset,
             remote_metrics::rmetrics_start,

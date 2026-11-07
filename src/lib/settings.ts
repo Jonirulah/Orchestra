@@ -13,7 +13,7 @@ import { DEFAULT_ITEMS, DEFAULT_INTERVAL, DEFAULT_RM_INTERVAL, INTERVAL_LIMITS, 
 import type { ItemId } from './statusbar.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
 
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';

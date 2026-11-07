@@ -16,6 +16,13 @@
   let armed = $state(false);
   let armTimer: number | undefined;
 
+  function resultText(e: be.McpAuditEntry): string {
+    if (e.decision === 'approved') return t('settings.mcp.resultApproved');
+    if (e.decision === 'auto') return t('settings.mcp.resultAuto');
+    if (e.decision === 'expired') return t('settings.mcp.resultExpired');
+    return e.outcome === 'denied' ? t('settings.mcp.resultDenied') : t('settings.mcp.resultAllowed');
+  }
+
   async function loadAudit() {
     try { audit = await be.mcpAudit(50); } catch { /* sin backend: lista vacía */ }
   }
@@ -130,8 +137,8 @@
           <tr class:denied={e.outcome === 'denied'} title={e.reason ?? ''}>
             <td>{when(e.ts)}</td>
             <td><code>{e.tool}</code></td>
-            <td>{e.host ?? ''}{e.host && e.target ? ' · ' : ''}{e.target ?? ''}</td>
-            <td>{e.outcome === 'denied' ? t('settings.mcp.resultDenied') : t('settings.mcp.resultAllowed')}</td>
+            <td>{e.host ?? ''}{e.host && (e.target || e.command) ? ' · ' : ''}{e.target ?? ''}{#if e.command}<code class="cmd" title={e.command}>{e.command}</code>{/if}</td>
+            <td>{resultText(e)}</td>
             <td>{kb(e.bytes)}</td>
           </tr>
         {/each}
@@ -151,5 +158,6 @@
   .audit th { text-align: left; color: var(--muted); font-weight: 600; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid var(--border-strong); }
   .audit td { padding: 5px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   .audit tr.denied td { color: var(--bad); }
+  .audit code.cmd { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   .audit code { font: 12px 'Cascadia Mono', Consolas, monospace; }
 </style>

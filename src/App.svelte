@@ -10,6 +10,7 @@
   import Palette from './components/Palette.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
   import ConfirmHostKey from './components/ConfirmHostKey.svelte';
+  import McpApproval from './components/McpApproval.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import SubagentDrawer from './components/SubagentDrawer.svelte';
 
@@ -52,6 +53,7 @@
   {#if app.accountDialog}<AccountDialog />{/if}
   {#if app.paletteOpen}<Palette />{/if}
   {#if app.hostKeyPrompt}<ConfirmHostKey />{/if}
+  {#if app.mcpApprovals.length}<McpApproval />{/if}
   <ContextMenu />
   <SubagentDrawer />
   {#if app.toastMsg}<div class="toast">{app.toastMsg}</div>{/if}

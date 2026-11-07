@@ -3,6 +3,24 @@
 All notable changes to Orchestra are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project follows [Semantic Versioning](https://semver.org/) (0.x: anything may change between minor versions).
 
+## [0.2.0] - 2026-11-07
+
+### Added
+- MCP tool **`run_command`**: agents can run one command on a saved SSH host and get stdout, stderr, exit code, a `truncated` flag
+  and the duration back. It follows the host's agent access level: `read` refuses (naming the mode), `ask` shows a dialog with the
+  host and the exact command and runs only if you approve (denied or unanswered after 120 s means it does not run), `full` runs
+  directly. Default timeout 60 s (max 600 s, then `ssh` is killed), output capped at 64 KB per stream, host keys are never accepted
+  automatically, credentials never leave the vault or appear in results.
+- Every `run_command` attempt, including refused ones, is written to the MCP audit log (time, host, mode, decision, command, exit
+  code, duration, first 2 KB of output). Settings → MCP shows the command and the decision.
+- English and Spanish text for the approval dialog and the new access level descriptions.
+
+### Changed
+- The MCP server is no longer read-only: its instructions and tool descriptions say so, and tell the model that command output is
+  untrusted data. Host access levels `ask` and `full` now mean what their labels say.
+- For hosts at `ask`/`full` the interface now also sends the local backend the key path, jump host and vault entry name needed to
+  start `ssh`. They are never returned over MCP.
+
 ## [0.1.0] - 2026-11-07
 
 First public release. Windows 10/11 only. Distributed as a portable `Orchestra.exe` and a per-user NSIS installer

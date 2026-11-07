@@ -52,6 +52,25 @@ test('host fields are copied and an unknown access level falls closed to none', 
   assert.ok(!('user' in bare) && !('port' in bare) && !('group' in bare));
 });
 
+test('ask/full hosts carry connection data (key path, jump, vault entry NAME) but never a password; read/none carry none', () => {
+  const base = { ...leakyHost(), authMethod: 'password' as const, hasPassword: true };
+  for (const access of ['ask', 'full'] as const) {
+    const h = mcpHost({ ...base, agentAccess: access });
+    assert.equal(h.identity, SECRETS[1]);
+    assert.equal(h.jump, SECRETS[2]);
+    assert.equal(h.secretKey, 'host:h1:password');
+    const json = JSON.stringify(h);
+    for (const s of [SECRETS[0], SECRETS[3], SECRETS[4], SECRETS[5]]) assert.ok(!json.includes(s), `leaked: ${s}`);
+    for (const k of ['password', 'passphrase', 'secretRef', 'notes', 'command']) assert.ok(!json.includes(`"${k}"`), k);
+  }
+  for (const access of ['read', 'none'] as const) {
+    const h = mcpHost({ ...base, agentAccess: access });
+    for (const k of ['identity', 'jump', 'secretKey', 'identitiesOnly']) assert.ok(!(k in h), `${access}: ${k}`);
+  }
+  const key = mcpHost({ ...leakyHost(), agentAccess: 'full', authMethod: 'key' });
+  assert.equal(key.identitiesOnly, true);
+});
+
 test('pane kinds, host links, workspace names and live state', () => {
   const snap = buildMcpSnapshot({ ...world(), live: { p1: { state: 'running' }, p3: { state: 'exited' } } });
   const by = Object.fromEntries(snap.panes.map((p) => [p.id, p]));

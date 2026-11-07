@@ -25,6 +25,7 @@ import hostDialog from './hostDialog.ts';
 import settingsKeys from './settingsKeys.ts';
 import hostkeyConfirm from './hostkeyConfirm.ts';
 import settingsMcp from './settingsMcp.ts';
+import mcpApproval from './mcpApproval.ts';
 import settingsUsage from './settingsUsage.ts';
 import providers from './providers.ts';
 import ctx from './ctx.ts';
@@ -58,6 +59,7 @@ export const en = {
   ...settingsKeys,
   ...hostkeyConfirm,
   ...settingsMcp,
+  ...mcpApproval,
   ...settingsUsage,
   ...providers,
   ...ctx,

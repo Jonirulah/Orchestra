@@ -95,6 +95,15 @@ impl Dest {
 /// Argumentos de `ssh` (array, sin shell). El destino va tras `--`. `BatchMode=yes` solo si NO hay secreto guardado.
 /// `StrictHostKeyChecking` es siempre `yes`: la huella no se acepta sola.
 pub fn build_args(d: &Dest) -> Vec<String> {
+    let mut a = base_args(d);
+    // Comando remoto constante: el guion llega por stdin.
+    a.push("sh".into());
+    a.push("-s".into());
+    a
+}
+
+/// Todo lo de `build_args` salvo el comando remoto (lo añade quien llama: `sh -s` aquí, el comando del agente en `mcp`).
+pub fn base_args(d: &Dest) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let mut o = |k: &str| {
         a.push("-o".into());
@@ -133,9 +142,6 @@ pub fn build_args(d: &Dest) -> Vec<String> {
         Some(u) => format!("{u}@{}", d.host),
         None => d.host.clone(),
     });
-    // Comando remoto constante: el guion llega por stdin.
-    a.push("sh".into());
-    a.push("-s".into());
     a
 }
 

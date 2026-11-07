@@ -18,7 +18,7 @@ and credit you in the release notes if you wish.
 ## What is in scope
 
 Anything in this repository that could expose secrets (SSH passwords and passphrases, Claude / Codex / opencode credentials, the MCP
-token), run commands or read files the user did not intend, or make Orchestra talk to an unexpected host. The local MCP server, the
+token), run commands (including through the MCP `run_command` tool without the approval its access level requires) or read files the user did not intend, or make Orchestra talk to an unexpected host. The local MCP server, the
 SSH askpass helper, backup import and the opt-in usage query are the most sensitive parts.
 
 ## Security model
