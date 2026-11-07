@@ -17,7 +17,7 @@ import { cleanSoundId } from './sounds.ts';
 import type { SoundId } from './sounds.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.3.0';
 
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
