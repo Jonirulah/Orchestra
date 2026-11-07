@@ -9,4 +9,6 @@ export default {
   'palette.settings': 'Settings…',
   'palette.toggleSidebar': 'Show / hide sidebar',
   'palette.signIn': 'Sign in · {name}',
+  'palette.openSaved': 'Open workspace «{name}»',
+  'palette.savedHint': 'saved',
 } as const;

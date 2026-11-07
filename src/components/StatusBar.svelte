@@ -18,6 +18,8 @@
   import { fmtMs } from '../lib/latency.ts';
   import { tokSummary } from '../lib/tokfmt.ts';
   import Icon from './Icon.svelte';
+  import MetricsHistory from './MetricsHistory.svelte';
+  import type { HistSource } from '../lib/history.ts';
 
   /** En la vista previa de Ajustes: sin tope de ancho de rejilla ni reinicio del muestreador compartido. */
   let { preview = false }: { preview?: boolean } = $props();
@@ -234,7 +236,16 @@
   }
   const built = $derived(items.map(build).filter((r): r is Row => r !== null));
   const firstSrv = $derived(source.kind === 'local' ? null : built.find((r) => (REMOTE_CAPABLE as readonly string[]).includes(r.id))?.id ?? null);
-  const rows = $derived(built.slice(0, fitItems(built.map((r) => r.id), Math.max(0, width - 20 - (firstSrv ? SRV_PX : 0))).length));
+  /** Ancho (px) del botón de la gráfica junto al nombre del host (18 + 4 de margen). */
+  const HIST_PX = 22;
+  const histPx = $derived(built.some((r) => r.id === 'hostname') ? HIST_PX : 0);
+  const rows = $derived(built.slice(0, fitItems(built.map((r) => r.id), Math.max(0, width - 20 - (firstSrv ? SRV_PX : 0) - histPx)).length));
+
+  // ---- histórico de la última hora: botón junto al nombre del host y panel flotante (MetricsHistory) ----
+  let histOpen = $state(false);
+  let histBtn = $state<HTMLButtonElement>();
+  /** Misma lógica que la barra: servidor si el panel SSH enfocado tiene métricas remotas; si no, este equipo. */
+  const histSrc = $derived<HistSource>(source.kind === 'remote' && fKey ? { kind: 'remote', key: fKey, host: srvHost } : { kind: 'local' });
 
   // ---- menú contextual: marcar/desmarcar elementos ----
   function toggle(id: ItemId) {
@@ -270,9 +281,19 @@
       {#if r.label}<span class="nm">{r.label}</span>{/if}
       <span class="val {r.level ?? ''}" class:dim={r.dim}>{r.text}</span>
     </span>
+    {#if r.id === 'hostname'}
+      <button
+        class="hist" class:on={histOpen} type="button" bind:this={histBtn} disabled={preview}
+        title={t('statusbar.hist.button')} aria-label={t('statusbar.hist.button')} aria-expanded={histOpen} aria-haspopup="dialog"
+        onclick={() => (histOpen = !histOpen)}
+      ><Icon name="chart" size={12} /></button>
+    {/if}
   {/each}
   {#if !rows.length}<span class="empty">{items.length ? '' : t('statusbar.empty')}</span>{/if}
 </div>
+{#if histOpen && !preview && rows.some((r) => r.id === 'hostname')}
+  <MetricsHistory src={histSrc} anchor={histBtn} onclose={() => (histOpen = false)} />
+{/if}
 
 <style>
   .sb {
@@ -294,6 +315,10 @@
   .dot.warn { background: var(--warn); }
   .dot.bad { background: var(--bad); }
   .empty { color: var(--faint); }
+  .hist { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 4px; border-radius: 4px; color: var(--muted); }
+  .hist:hover:not(:disabled), .hist.on { color: var(--accent); background: var(--raise); }
+  .hist:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .hist:disabled { cursor: default; }
   @media (prefers-reduced-motion: reduce) {
     .val, .dot { transition: none; }
   }

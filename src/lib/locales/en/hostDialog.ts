@@ -4,7 +4,7 @@ export default {
   'host.dialog.titleNew': 'New SSH host',
   'host.dialog.nameLabel': 'Name',
   'host.dialog.namePlaceholder': 'Production web',
-  'host.dialog.groupLabel': 'Group',
+  'host.dialog.groupLabel': 'Folder',
   'host.dialog.groupPlaceholder': 'Work / Home / Clients…',
   'host.dialog.hostLabel': 'Host or IP *',
   'host.dialog.hostPlaceholder': '10.0.0.5 or srv.example.com',

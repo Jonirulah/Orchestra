@@ -2,7 +2,11 @@
   import { app } from '../lib/store.svelte.ts';
   import { PRESETS, displayName } from '../lib/model.ts';
   import { t } from '../lib/i18n.ts';
+  import { ctxmenu } from '../lib/ctxmenu.svelte.ts';
+  import { sep } from '../lib/ctxmenu.ts';
+  import type { MenuItem } from '../lib/ctxmenu.ts';
   import Icon from './Icon.svelte';
+  import SavedWorkspaces from './SavedWorkspaces.svelte';
 
   let pickerOpen = $state(false);
   let editing = $state<string | null>(null);
@@ -20,6 +24,41 @@
     editing = null;
   }
   function focusOnMount(el: HTMLInputElement) { el.focus(); el.select(); }
+
+  // ---------- menú de la pestaña ----------
+  function tabMenu(id: string): MenuItem[] {
+    const many = app.workspaces.length > 1;
+    return [
+      { id: 'rename', label: t('topbar.menu.rename'), hint: 'F2', run: () => (editing = id) },
+      { id: 'duplicate', label: t('topbar.menu.duplicate'), run: () => app.duplicateWorkspace(id) },
+      { id: 'save', label: t('topbar.menu.save'), run: () => openSave(id) },
+      sep(),
+      { id: 'close', label: t('topbar.menu.close'), danger: true, disabled: !many, run: () => app.closeWorkspace(id) },
+      { id: 'closeOthers', label: t('topbar.menu.closeOthers'), danger: true, disabled: !many, run: () => app.closeOtherWorkspaces(id) },
+    ];
+  }
+  function onTabKey(id: string, e: KeyboardEvent) {
+    if (e.key === 'F2') { e.preventDefault(); editing = id; }
+  }
+
+  // ---------- guardar espacio ----------
+  let savingFor = $state<string | null>(null);
+  let saveName = $state('');
+  let conflict = $state<string | null>(null);
+  function openSave(id: string) {
+    const w = app.workspaces.find((x) => x.id === id);
+    if (!w) return;
+    savingFor = id;
+    saveName = displayName(w.name);
+    conflict = null;
+  }
+  function submitSave(overwrite = false) {
+    if (!savingFor) return;
+    const r = app.saveWorkspace(savingFor, saveName, overwrite);
+    if (r.ok) { savingFor = null; return; }
+    if (r.reason === 'conflict') conflict = r.existing?.name ?? saveName.trim();
+    if (r.reason === 'full') savingFor = null;
+  }
 </script>
 
 <svelte:window onpointerdown={(e) => { if (pickerOpen && !(e.target as HTMLElement).closest('.picker-wrap')) pickerOpen = false; }} />
@@ -34,7 +73,8 @@
           <input class="rename" value={w.name} use:focusOnMount onblur={(e) => finishRename(w.id, e)}
             onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') editing = null; }} />
         {:else}
-          <button class="tname" onclick={() => app.switchWorkspace(w.id)} ondblclick={() => (editing = w.id)} title={t('topbar.renameTitle')}>
+          <button class="tname" onclick={() => app.switchWorkspace(w.id)} ondblclick={() => (editing = w.id)} title={t('topbar.renameTitle')}
+            onkeydown={(e) => onTabKey(w.id, e)} oncontextmenu={(e) => ctxmenu.openFromEvent(e, tabMenu(w.id), e.currentTarget as HTMLElement)}>
             {displayName(w.name)}<span class="cnt">{w.panes.length}</span>
           </button>
           {#if app.workspaces.length > 1}
@@ -44,6 +84,7 @@
       </div>
     {/each}
     <button class="iconbtn" title={t('topbar.newWorkspaceTitle')} onclick={() => app.addWorkspace()}><Icon name="plus" /></button>
+    <SavedWorkspaces onsave={() => openSave(app.activeId)} />
   </div>
 
   <span class="grow"></span>
@@ -78,7 +119,35 @@
   </div>
 </header>
 
+{#if savingFor}
+  <div class="modal-back" role="presentation" onpointerdown={(e) => { if (e.target === e.currentTarget) savingFor = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') savingFor = null; }}>
+    <div class="modal save-ws" role="dialog" aria-modal="true" aria-labelledby="save-ws-title">
+      <h2 id="save-ws-title">{t('topbar.save.title')}</h2>
+      <div class="body">
+        <label class="field"><span>{t('topbar.save.nameLabel')}</span>
+          <input bind:value={saveName} use:focusOnMount oninput={() => (conflict = null)} maxlength="60"
+            onkeydown={(e) => { if (e.key === 'Enter') submitSave(!!conflict); }} />
+        </label>
+        {#if conflict}
+          <p class="s-msg err" role="alert">{t('topbar.save.conflict', { name: conflict })}</p>
+        {/if}
+        <p class="hint">{t('topbar.save.hint')}</p>
+      </div>
+      <div class="foot">
+        <button class="btn ghost" onclick={() => (savingFor = null)}>{t('topbar.save.cancel')}</button>
+        {#if conflict}
+          <button class="btn primary" onclick={() => submitSave(true)}>{t('topbar.save.overwrite')}</button>
+        {:else}
+          <button class="btn primary" disabled={!saveName.trim()} onclick={() => submitSave()}>{t('topbar.save.submit')}</button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  .save-ws { width: min(440px, 92vw); }
   .top { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
   .grow { flex: 1; }
   .tabs { display: flex; align-items: center; gap: 3px; min-width: 0; overflow-x: auto; }

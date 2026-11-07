@@ -24,6 +24,8 @@ const TAIL_BYTES: u64 = 1_500_000;
 const SUB_ACTIVE_SECS: u64 = 25;
 /// Un subagente terminado se queda en la lista este rato (para ver que acabó) y luego desaparece.
 const HIDE_DONE_SECS: u64 = 90;
+/// Largo máximo del último pedido que se manda a la interfaz (ella lo recorta otra vez para la ficha).
+const PROMPT_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +64,14 @@ pub struct AgentInfo {
     pub ctx_tokens: u64,
     pub last_request_at: Option<u64>,
     pub cache_ttl: u64,
+    /// Modelo de la última respuesta (p. ej. "claude-opus-5-5"), si se sabe.
+    pub model: Option<String>,
+    /// Último pedido del usuario (primera parte, ya recortada).
+    pub last_prompt: Option<String>,
+    /// Epoch (s) en que arrancó la sesión (`startedAt` de sessions/<pid>.json).
+    pub started_at: Option<u64>,
+    /// Herramienta que espera permiso cuando el estado es "waiting".
+    pub waiting_for: Option<String>,
     /// Gasto de la sesión (hilo principal) y de sus subagentes.
     pub tokens: Tokens,
     pub sub_tokens: Tokens,
@@ -138,7 +148,42 @@ pub struct Parsed {
     pub last_request_at: Option<u64>,
     pub cache_ttl: u64,
     pub todos: Vec<Todo>,
+    /// Modelo de la última respuesta real (se ignoran las `<synthetic>`).
+    pub model: Option<String>,
+    /// Último pedido escrito por el usuario (sin resultados de herramientas, avisos ni comandos locales).
+    pub last_prompt: Option<String>,
     calls: Vec<Call>,
+}
+
+/// Texto de un mensaje de usuario si es un pedido escrito por una persona; `None` para metadatos, avisos de
+/// subagentes, mensajes de otras sesiones, resúmenes de compactación, comandos locales y resultados de herramientas.
+fn human_prompt(v: &Value) -> Option<String> {
+    if v["isMeta"].as_bool() == Some(true) || v["isCompactSummary"].as_bool() == Some(true) {
+        return None;
+    }
+    if let Some(kind) = v["origin"]["kind"].as_str() {
+        if kind != "human" {
+            return None;
+        }
+    }
+    let content = &v["message"]["content"];
+    let txt = match content {
+        Value::String(s) => s.clone(),
+        Value::Array(items) => {
+            if items.iter().any(|it| it["type"] == "tool_result") {
+                return None;
+            }
+            items.iter().filter(|it| it["type"] == "text").filter_map(|it| it["text"].as_str()).collect::<Vec<_>>().join(" ")
+        }
+        _ => return None,
+    };
+    let t = txt.trim();
+    if t.is_empty() || t.starts_with('<') || t.starts_with("[Request interrupted") {
+        return None;
+    }
+    // Solo la primera línea con texto: basta para recordar de qué va.
+    let first = t.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(t);
+    Some(short(first, PROMPT_CHARS))
 }
 
 /// "2026-11-06T18:24:11.123Z" -> segundos epoch (UTC), sin dependencias.
@@ -204,6 +249,11 @@ pub fn parse_transcript(text: &str) -> Parsed {
         match v["type"].as_str() {
             Some("ai-title") => out.title = v["aiTitle"].as_str().map(str::to_string),
             Some("assistant") => {
+                if let Some(m) = v["message"]["model"].as_str() {
+                    if !m.is_empty() && !m.starts_with('<') {
+                        out.model = Some(m.to_string());
+                    }
+                }
                 let u = &v["message"]["usage"];
                 if u.is_object() {
                     out.last_request_at = v["timestamp"].as_str().and_then(iso_to_epoch);
@@ -245,6 +295,9 @@ pub fn parse_transcript(text: &str) -> Parsed {
                 }
             }
             Some("user") => {
+                if let Some(p) = human_prompt(&v) {
+                    out.last_prompt = Some(p);
+                }
                 // Aviso de fin de un subagente en segundo plano (texto suelto, no un tool_result).
                 let content = &v["message"]["content"];
                 let note = content
@@ -404,6 +457,7 @@ fn scan_one(sys: &System, pane_id: &str, root_pid: u32, dirs: &[PathBuf]) -> Opt
                 cwd: v["cwd"].as_str().map(str::to_string),
                 status: v["status"].as_str().unwrap_or("idle").to_string(),
                 config_dir: Some(dir.to_string_lossy().into_owned()),
+                started_at: v["startedAt"].as_u64().map(|ms| ms / 1000),
                 ..Default::default()
             };
             if let Some(sid) = sid {
@@ -416,7 +470,12 @@ fn scan_one(sys: &System, pane_id: &str, root_pid: u32, dirs: &[PathBuf]) -> Opt
                     if let Some(p) = parsed_cached(&tp) {
                         info.subagents = subagents(&p, &tp, &sid);
                         info.title = p.title;
+                        if info.status == "waiting" {
+                            info.waiting_for = p.current.clone();
+                        }
                         info.current = if info.status == "busy" { p.current } else { None };
+                        info.model = p.model;
+                        info.last_prompt = p.last_prompt;
                         info.ctx_tokens = p.ctx_tokens;
                         info.last_request_at = p.last_request_at;
                         info.cache_ttl = if p.cache_ttl == 0 { 3600 } else { p.cache_ttl };
@@ -554,6 +613,47 @@ mod tests {
         assert_eq!(subs[1].kind, "peon");
     }
 
+    #[test]
+    fn modelo_y_ultimo_pedido_del_usuario() {
+        let l = [
+            line(serde_json::json!({"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"Arregla el login
+y luego los tests"}})),
+            line(serde_json::json!({"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":1},"content":[]}})),
+            // Nada de esto es un pedido de la persona:
+            line(serde_json::json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"x"}]}})),
+            line(serde_json::json!({"type":"user","isMeta":true,"message":{"content":"<system-reminder>hola</system-reminder>"}})),
+            line(serde_json::json!({"type":"user","origin":{"kind":"task-notification"},"message":{"content":"<task-notification>
+</task-notification>"}})),
+            line(serde_json::json!({"type":"user","isMeta":true,"origin":{"kind":"peer"},"message":{"content":"Another Claude session sent a message"}})),
+            line(serde_json::json!({"type":"user","isCompactSummary":true,"message":{"content":"This session is being continued"}})),
+            line(serde_json::json!({"type":"user","message":{"content":"<command-name>/login</command-name>"}})),
+            line(serde_json::json!({"type":"user","message":{"content":"[Request interrupted by user]"}})),
+            // Una respuesta sintética no pisa el modelo real.
+            line(serde_json::json!({"type":"assistant","message":{"model":"<synthetic>","content":[]}})),
+        ]
+        .join("
+");
+        let p = parse_transcript(&l);
+        assert_eq!(p.model.as_deref(), Some("claude-opus-5-5"));
+        assert_eq!(p.last_prompt.as_deref(), Some("Arregla el login"));
+
+        // El pedido más reciente gana, también en formato de lista con imagen; y se recorta.
+        let largo = "palabra ".repeat(100);
+        let l2 = [
+            line(serde_json::json!({"type":"user","message":{"content":"primero"}})),
+            line(serde_json::json!({"type":"user","message":{"content":[{"type":"image"},{"type":"text","text":largo}]}})),
+        ]
+        .join("
+");
+        let p2 = parse_transcript(&l2);
+        let lp = p2.last_prompt.unwrap();
+        assert!(lp.starts_with("palabra palabra") && lp.ends_with('…'));
+        assert_eq!(lp.chars().count(), PROMPT_CHARS + 1);
+        // Sin mensajes: nada inventado.
+        let vacio = parse_transcript("");
+        assert!(vacio.model.is_none() && vacio.last_prompt.is_none());
+    }
+
     fn lineas_subagente_en_segundo_plano(con_aviso: Option<(&str, &str)>) -> String {
         let mut t = String::new();
         t.push_str(r#"{"type":"assistant","timestamp":"2026-11-06T18:00:00Z","message":{"usage":{"input_tokens":1},"content":[{"type":"tool_use","id":"toolu_A","name":"Agent","input":{"subagent_type":"obrero","description":"Haz algo"}}]}}"#);
@@ -626,6 +726,7 @@ mod tests {
         eprintln!("archivo: {} ({} KB)", f.file_name().unwrap().to_string_lossy(), std::fs::metadata(f).unwrap().len() / 1024);
         eprintln!("parseo: {:?} | título: {:?} | ctx: {} | actual: {:?}", t0.elapsed(), p.title, p.ctx_tokens, p.current);
         eprintln!("llamadas Agent: {} | todos: {}", p.calls.len(), p.todos.len());
+        eprintln!("modelo: {:?} | último pedido: {:?}", p.model, p.last_prompt);
         for s in subs.iter().rev().take(6) {
             eprintln!("  [{}] {} · {} (bg={})", s.state, s.kind, s.description, s.background);
         }

@@ -32,4 +32,5 @@ export default {
   'store.import.noKnownSettings': 'No se ha encontrado ningún ajuste conocido en ese JSON',
   'store.toast.providerAccountCreated': 'Cuenta «{name}» añadida',
   'store.pane.signIn': 'Iniciar sesión · {name}',
+  'store.toast.hostsSortManual': 'Orden cambiado a manual: se queda el A-Z que veías y ya puedes recolocarlo',
 } as const;

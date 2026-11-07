@@ -7,8 +7,11 @@
 
 use parking_lot::Mutex;
 use serde::Serialize;
-use std::time::Instant;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use sysinfo::{DiskRefreshKind, Disks, Networks, System};
+
+use crate::history::{now_secs, Point, Ring};
 
 /// Contadores acumulados de disco y red (suma de todos los dispositivos que cuentan).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -136,15 +139,78 @@ impl Sampler {
 
 static SAMPLER: Mutex<Option<Sampler>> = Mutex::new(None);
 
+// ---------- histórico de la última hora (panel de gráficas) ----------
+
+/// Cada cuánto muestrea el hilo del histórico (s).
+pub const HISTORY_STEP_SECS: u64 = 5;
+static HISTORY: Mutex<Ring> = Mutex::new(Ring::new());
+/// Generación del hilo del histórico: 0 = parado. `metrics_reset` la sube y el hilo vivo, al ver otra, termina.
+static HIST_GEN: AtomicU64 = AtomicU64::new(0);
+static HIST_NEXT: AtomicU64 = AtomicU64::new(1);
+
+/// Punto del histórico a partir de una muestra local (sin swap configurada = `None`).
+pub fn point_of(m: &Metrics, t: u64) -> Point {
+    Point {
+        t,
+        cpu: m.cpu as f64,
+        ram_used: m.ram_used,
+        ram_total: m.ram_total,
+        swap_used: (m.swap_total > 0).then_some(m.swap_used),
+        swap_total: (m.swap_total > 0).then_some(m.swap_total),
+        net_in: m.net_in,
+        net_out: m.net_out,
+        disk_read: Some(m.disk_read),
+        disk_write: Some(m.disk_write),
+    }
+}
+
+/// Arranca (una sola vez) el hilo que muestrea cada `HISTORY_STEP_SECS` con el MISMO muestreador que la barra:
+/// las tasas usan el tiempo real entre lecturas, así que intercalar llamadas no las falsea. No refresca procesos.
+fn ensure_history() {
+    if HIST_GEN.load(Ordering::SeqCst) != 0 {
+        return;
+    }
+    let gen = HIST_NEXT.fetch_add(1, Ordering::SeqCst);
+    if HIST_GEN.compare_exchange(0, gen, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return; // otro llegó antes
+    }
+    let _ = std::thread::Builder::new().name("metrics-history".into()).spawn(move || {
+        let alive = || HIST_GEN.load(Ordering::SeqCst) == gen;
+        while alive() {
+            let m = SAMPLER.lock().get_or_insert_with(Sampler::new).sample();
+            if m.ready && alive() {
+                HISTORY.lock().push(point_of(&m, now_secs()));
+            }
+            for _ in 0..(HISTORY_STEP_SECS * 4) {
+                if !alive() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        }
+    });
+}
+
 /// Una muestra. `async` para que Tauri la ejecute en su pool y no en el hilo de la ventana.
 #[tauri::command(async)]
 pub fn metrics_sample() -> Metrics {
+    ensure_history();
     SAMPLER.lock().get_or_insert_with(Sampler::new).sample()
 }
 
+/// Puntos de la última hora (del más viejo al más nuevo). Arranca el histórico si no lo estaba.
+#[tauri::command(async)]
+pub fn metrics_history() -> Vec<Point> {
+    ensure_history();
+    HISTORY.lock().snapshot(now_secs())
+}
+
 /// Libera el muestreador (al apagar la barra): la siguiente muestra vuelve a empezar sin referencia.
+/// También para el hilo del histórico y lo vacía.
 #[tauri::command(async)]
 pub fn metrics_reset() {
+    HIST_GEN.store(0, Ordering::SeqCst);
+    HISTORY.lock().clear();
     *SAMPLER.lock() = None;
 }
 
@@ -189,6 +255,38 @@ mod tests {
         let a = Counters { disk_read: 0, disk_write: 100, net_in: 1000, net_out: 50 };
         let b = Counters { disk_read: 400, disk_write: 300, net_in: 3000, net_out: 50 };
         assert_eq!(rates(&a, &b, 2.0), (200.0, 100.0, 1000.0, 0.0));
+    }
+
+    #[test]
+    fn punto_sin_swap_la_omite() {
+        let m = Metrics { ready: true, cpu: 12.5, ram_used: 3, ram_total: 8, swap_used: 0, swap_total: 0, disk_read: 1.0, ..Default::default() };
+        let p = point_of(&m, 77);
+        assert_eq!((p.t, p.cpu, p.ram_used, p.ram_total), (77, 12.5, 3, 8));
+        assert_eq!((p.swap_used, p.swap_total), (None, None));
+        assert_eq!(p.disk_read, Some(1.0));
+        let p2 = point_of(&Metrics { swap_used: 1, swap_total: 4, ..m }, 78);
+        assert_eq!((p2.swap_used, p2.swap_total), (Some(1), Some(4)));
+    }
+
+    /// El reinicio (barra apagada) para el hilo del histórico y lo vacía; el siguiente uso lo vuelve a arrancar.
+    #[test]
+    fn reset_para_y_vacia_el_historico() {
+        ensure_history();
+        let g1 = HIST_GEN.load(Ordering::SeqCst);
+        assert_ne!(g1, 0, "arranca perezoso");
+        ensure_history();
+        assert_eq!(HIST_GEN.load(Ordering::SeqCst), g1, "un solo hilo");
+        HISTORY.lock().push(Point { t: now_secs(), ..Default::default() });
+        assert_eq!(metrics_history().len(), 1);
+        metrics_reset();
+        assert_eq!(HIST_GEN.load(Ordering::SeqCst), 0);
+        assert!(HISTORY.lock().snapshot(now_secs()).is_empty());
+        std::thread::sleep(Duration::from_millis(400));
+        assert!(HISTORY.lock().snapshot(now_secs()).is_empty(), "el hilo viejo no vuelve a escribir");
+        let _ = metrics_history();
+        let g2 = HIST_GEN.load(Ordering::SeqCst);
+        assert!(g2 != 0 && g2 != g1, "nuevo hilo, otra generación");
+        metrics_reset();
     }
 
     /// Lectura real dos veces con 1 s de diferencia. `cargo test --bin orchestra real_sample -- --ignored --nocapture`

@@ -4,6 +4,7 @@ mod accounts;
 mod agents;
 mod commands;
 mod git;
+mod history;
 mod hostkey;
 mod idle;
 mod mcp;
@@ -126,10 +127,12 @@ fn main() {
             mcp::mcp_approval_answer,
             metrics::metrics_sample,
             metrics::metrics_reset,
+            metrics::metrics_history,
             remote_metrics::rmetrics_start,
             remote_metrics::rmetrics_stop,
             remote_metrics::rmetrics_sample,
             remote_metrics::rmetrics_hidden,
+            remote_metrics::rmetrics_history,
         ])
         .setup(|app| {
             app.manage(mcp::McpManager::new(app.handle()));

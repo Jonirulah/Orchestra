@@ -3,6 +3,25 @@
 All notable changes to Orchestra are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project follows [Semantic Versioning](https://semver.org/) (0.x: anything may change between minor versions).
 
+## [0.3.0] - 2026-11-07
+
+### Added
+- **Usage history** in the status bar: a chart button next to the host name opens the last 60 minutes (or as long as the app has
+  been open) of CPU, RAM and swap, network and disk, with current, max and average values and a shared cursor. Samples are taken
+  every 5 s in the background while the status bar is on; gaps are shown as gaps. On an SSH pane with server metrics enabled it
+  shows the server's history.
+- **SSH host folders and ordering**: drag hosts within and between folders, drag folders, or use Alt+↑/↓ and the context menu.
+  Sort by manual order or name A-Z. Folders can be created, renamed, collapsed (remembered) and deleted (their hosts move to
+  "No folder"). The host dialog suggests existing folders.
+- **Saved workspaces**: right-click a tab to rename (also F2 or double-click), duplicate, save, close or close the others. Saved
+  workspaces keep the grid and how each pane starts (folder, command, host, account), never secrets or terminal output, and can be
+  opened, renamed, overwritten or deleted from the button next to "+" and from the command palette. Claude panes start a new
+  conversation when a saved workspace is opened. Included in the full backup.
+- **Agent card**: hovering an active agent for a moment shows its model, state and for how long, context use against the model
+  window, cache time left, current tool, your last prompt, todos, subagents and session totals. Delay configurable in Settings →
+  Agents, can be turned off.
+- **Notification sounds** (synthesised, no audio files) when an agent needs attention or finishes, with choice of sound and volume.
+
 ## [0.2.0] - 2026-11-07
 
 ### Added

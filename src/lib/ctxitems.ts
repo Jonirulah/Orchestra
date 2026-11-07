@@ -4,6 +4,8 @@ import { ACCOUNT_COLORS, PRESETS, accountTitle, providerOf } from './model.ts';
 import type { Account, Provider } from './model.ts';
 import { ACCOUNTS_SORTS, providerGroupKey } from './accountview.ts';
 import type { AccountsFilter, AccountsSort } from './accountview.ts';
+import { HOSTS_SORTS } from './hostview.ts';
+import type { HostsSort } from './hostview.ts';
 import { sep, tidy } from './ctxmenu.ts';
 import type { MenuItem } from './ctxmenu.ts';
 import { t, tk } from './i18n.ts';
@@ -167,5 +169,99 @@ export function accountsViewMenu(c: AccountsViewMenuCtx): MenuItem[] {
       disabled: c.counts[p] === 0,
       run: () => c.setFilter(p),
     })),
+  ]);
+}
+
+// ---------- hosts SSH: menú de la cabecera, de una carpeta y de un host (orden y carpetas en hostview.ts) ----------
+
+export interface HostsViewMenuCtx {
+  sort: HostsSort;
+  /** Entradas de ~/.ssh/config que aún no son hosts (0 = «Importar» desactivado). */
+  importable: number;
+  hostCount: number;
+  setSort(s: HostsSort): void;
+  newFolder(): void;
+  importHosts(): void;
+  exportHosts(): void;
+}
+
+/** Menú del botón de la cabecera SSH: «Ordenar por» (submenú), «Nueva carpeta», importar y exportar. */
+export function hostsViewMenu(c: HostsViewMenuCtx): MenuItem[] {
+  return tidy([
+    {
+      id: 'sort',
+      label: t('ctx.hostsView.sortBy'),
+      children: HOSTS_SORTS.map((s) => ({ id: `sort:${s}`, label: tk(`ctx.hostsView.sort.${s}`), checked: c.sort === s, run: () => c.setSort(s) })),
+    },
+    { id: 'newFolder', label: t('ctx.hostsView.newFolder'), run: c.newFolder },
+    sep('s1'),
+    { id: 'import', label: c.importable ? t('sidebar.ssh.importAllCount', { n: c.importable }) : t('sidebar.ssh.importAll'), disabled: !c.importable, run: c.importHosts },
+    { id: 'export', label: t('sidebar.ssh.export'), disabled: !c.hostCount, run: c.exportHosts },
+  ]);
+}
+
+export interface HostFolderMenuCtx {
+  collapsed: boolean;
+  canUp: boolean;
+  canDown: boolean;
+  toggle(): void;
+  rename(): void;
+  up(): void;
+  down(): void;
+  newFolder(): void;
+  remove(): void;
+}
+
+/** Clic derecho en una carpeta de hosts. Borrar la carpeta nunca borra hosts: pasan a «sin carpeta». */
+export function hostFolderMenu(c: HostFolderMenuCtx): MenuItem[] {
+  return tidy([
+    { id: 'toggle', label: c.collapsed ? t('ctx.hostFolder.expand') : t('ctx.hostFolder.collapse'), run: c.toggle },
+    { id: 'rename', label: t('ctx.hostFolder.rename'), hint: 'F2', run: c.rename },
+    sep('s1'),
+    { id: 'up', label: t('ctx.host.moveUp'), hint: 'Alt+↑', disabled: !c.canUp, run: c.up },
+    { id: 'down', label: t('ctx.host.moveDown'), hint: 'Alt+↓', disabled: !c.canDown, run: c.down },
+    sep('s2'),
+    { id: 'new', label: t('ctx.hostsView.newFolder'), run: c.newFolder },
+    { id: 'remove', label: t('ctx.hostFolder.remove'), danger: true, confirm: t('ctx.hostFolder.removeConfirm'), run: c.remove },
+  ]);
+}
+
+export interface HostMenuCtx {
+  /** Carpeta actual ('' = sin carpeta). */
+  folder: string;
+  /** Carpetas con nombre, en el orden en que se ven. */
+  folders: readonly string[];
+  canUp: boolean;
+  canDown: boolean;
+  connect(): void;
+  edit(): void;
+  up(): void;
+  down(): void;
+  moveTo(folder: string): void;
+  /** Crea una carpeta y mete el host en ella. */
+  moveToNew(): void;
+  remove(): void;
+}
+
+/** Clic derecho (o tecla de menú) en un host guardado. */
+export function hostMenu(c: HostMenuCtx): MenuItem[] {
+  return tidy([
+    { id: 'connect', label: t('ctx.host.connect'), run: c.connect },
+    { id: 'edit', label: t('ctx.host.edit'), run: c.edit },
+    sep('s1'),
+    { id: 'up', label: t('ctx.host.moveUp'), hint: 'Alt+↑', disabled: !c.canUp, run: c.up },
+    { id: 'down', label: t('ctx.host.moveDown'), hint: 'Alt+↓', disabled: !c.canDown, run: c.down },
+    {
+      id: 'moveTo',
+      label: t('ctx.host.moveTo'),
+      children: [
+        ...c.folders.map((f): MenuItem => ({ id: `to:${f}`, label: f, checked: c.folder === f, run: () => c.moveTo(f) })),
+        { id: 'to:', label: t('sidebar.ssh.folder.none'), checked: c.folder === '', run: () => c.moveTo('') },
+        sep('ts'),
+        { id: 'toNew', label: t('ctx.host.moveToNew'), run: c.moveToNew },
+      ],
+    },
+    sep('s2'),
+    { id: 'remove', label: t('ctx.host.remove'), danger: true, confirm: t('ctx.confirm'), run: c.remove },
   ]);
 }

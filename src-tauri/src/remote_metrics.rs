@@ -19,6 +19,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
+use crate::history::{now_secs, Point, Ring};
 use crate::metrics::rate_per_sec;
 
 /// Tope de una línea del servidor (bytes): más larga se descarta.
@@ -315,6 +316,23 @@ pub fn compute(prev: Option<&Raw>, cur: &Raw, elapsed: f64) -> Sample {
     s
 }
 
+/// Punto del histórico a partir de una muestra del servidor. El guion siempre manda los contadores de disco
+/// (0 si no hay discos reconocibles); sin swap configurada, la swap va como `None` para que la gráfica la omita.
+pub fn point_of(s: &Sample, t: u64) -> Point {
+    Point {
+        t,
+        cpu: s.cpu,
+        ram_used: s.ram_used,
+        ram_total: s.ram_total,
+        swap_used: (s.swap_total > 0).then_some(s.swap_used),
+        swap_total: (s.swap_total > 0).then_some(s.swap_total),
+        net_in: s.net_in,
+        net_out: s.net_out,
+        disk_read: Some(s.disk_read),
+        disk_write: Some(s.disk_write),
+    }
+}
+
 /// Máximo una línea cada `MIN_GAP`.
 #[derive(Default)]
 pub struct Throttle {
@@ -522,6 +540,8 @@ struct Shared {
     guard: ChildGuard,
     snap: Mutex<Snap>,
     spawns: AtomicU64,
+    /// Última hora de muestras válidas del servidor (panel de gráficas). Muere con el monitor.
+    hist: Mutex<Ring>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -622,6 +642,9 @@ fn supervise(sh: Arc<Shared>, launcher: Arc<dyn Launcher>, dest: Dest) {
                         }
                         let Some(raw) = parse_line(&l) else { continue };
                         let s = compute(prev.as_ref().map(|p| &p.0), &raw, prev.as_ref().map(|p| now.duration_since(p.1).as_secs_f64()).unwrap_or(0.0));
+                        if s.ready {
+                            sh.hist.lock().push(point_of(&s, now_secs()));
+                        }
                         {
                             let mut g = sh.snap.lock();
                             g.st = St::Ok;
@@ -740,6 +763,7 @@ impl Manager {
             guard: ChildGuard::default(),
             snap: Mutex::new(Snap { st: St::Connecting, reason: None, kind: None, sample: None, last_line: None }),
             spawns: AtomicU64::new(0),
+            hist: Mutex::new(Ring::new()),
         });
         let (sh, l, dd) = (shared.clone(), self.launcher.clone(), d.clone());
         std::thread::spawn(move || supervise(sh, l, dd));
@@ -780,6 +804,13 @@ impl Manager {
             sample: s.sample.clone(),
             age_ms: age.map(|a| a.as_millis() as u64),
         }
+    }
+
+    /// Histórico de la última hora de este destino; vacío si no hay monitor (clave desconocida o ya parado).
+    pub fn history(&self, key: &str) -> Vec<Point> {
+        let Some(sh) = self.guard_of(key) else { return Vec::new() };
+        let pts = sh.hist.lock().snapshot(now_secs());
+        pts
     }
 
     /// Ventana oculta/visible. Oculta más de `hidden_drop`: se sueltan los enlaces; al volver se retoman.
@@ -878,6 +909,11 @@ pub fn rmetrics_stop(m: tauri::State<'_, Arc<Manager>>, key: String) {
 #[tauri::command(async)]
 pub fn rmetrics_sample(m: tauri::State<'_, Arc<Manager>>, key: String) -> Snapshot {
     m.snapshot(&key)
+}
+
+#[tauri::command(async)]
+pub fn rmetrics_history(m: tauri::State<'_, Arc<Manager>>, key: String) -> Vec<Point> {
+    m.history(&key)
 }
 
 #[tauri::command(async)]
@@ -1280,6 +1316,47 @@ mod tests {
         assert!(wait_for(|| f.n.load(Ordering::SeqCst) >= 2, 15_000), "al volver se reconecta");
         assert!(wait_for(|| m.snapshot(&k).state == "ok", 15_000));
         m.shutdown();
+    }
+
+    #[test]
+    fn historico_por_clave_y_se_borra_al_parar() {
+        let (m, _f) = mgr(200);
+        // si una aserción falla, que no queden sustitutos huérfanos colgando la batería
+        struct Abajo(Arc<Manager>);
+        impl Drop for Abajo {
+            fn drop(&mut self) {
+                self.0.shutdown();
+            }
+        }
+        let _abajo = Abajo(m.clone());
+        let a = m.start(dest(), 3).unwrap();
+        let b = m.start(Dest { host: "other.example.com".into(), ..dest() }, 3).unwrap();
+        assert!(m.history("nadie@nada:22|").is_empty(), "clave desconocida = vacío");
+        // la primera línea no trae tasas (no cuenta); la segunda (0,6 s después) sí
+        assert!(wait_for(|| !m.history(&a).is_empty() && !m.history(&b).is_empty(), 15_000), "sin puntos");
+        let pa = m.history(&a);
+        assert_eq!(pa.len(), 1, "hueco mínimo de 4 s: una línea cada 0,6 s deja un solo punto");
+        let p = &pa[0];
+        assert_eq!(p.cpu, 0.0, "el sustituto repite los contadores: sin carga");
+        assert_eq!(p.ram_total, 1000 * 1024);
+        assert_eq!(p.ram_used, 500 * 1024);
+        assert_eq!((p.swap_used, p.swap_total), (None, None), "sin swap: se omite, no cero");
+        assert!(p.disk_read.is_some());
+        assert!(p.t > 1_600_000_000);
+        // parar uno no toca el del otro
+        m.stop(&a);
+        m.reap(Instant::now() + Duration::from_secs(1));
+        assert!(m.history(&a).is_empty(), "al parar el monitor se borra su histórico");
+        assert!(!m.history(&b).is_empty());
+        m.shutdown();
+        assert!(m.history(&b).is_empty());
+    }
+
+    #[test]
+    fn punto_remoto_con_swap() {
+        let s = Sample { ready: true, cpu: 50.0, ram_used: 1, ram_total: 2, swap_used: 3, swap_total: 4, disk_read: 5.0, disk_write: 6.0, net_in: 7.0, net_out: 8.0, ..Default::default() };
+        let p = point_of(&s, 9);
+        assert_eq!(p, Point { t: 9, cpu: 50.0, ram_used: 1, ram_total: 2, swap_used: Some(3), swap_total: Some(4), net_in: 7.0, net_out: 8.0, disk_read: Some(5.0), disk_write: Some(6.0) });
     }
 
     #[test]

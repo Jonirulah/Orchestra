@@ -27,6 +27,7 @@
     c.push({ label: t('palette.newHost'), icon: 'plus', run: () => app.newHost() });
     c.push({ label: t('palette.addAccount'), icon: 'user', run: () => (app.accountDialog = true) });
     c.push({ label: t('palette.newWorkspace'), icon: 'plus', run: () => app.addWorkspace() });
+    for (const sw of app.savedWorkspaces) c.push({ label: t('palette.openSaved', { name: sw.name }), hint: t('palette.savedHint'), icon: 'layers', run: () => app.openSavedWorkspace(sw.id) });
     c.push({ label: t('palette.equalize'), icon: 'grid', run: () => app.equalize() });
     c.push({ label: t('palette.settings'), hint: 'Ctrl+,', icon: 'gear', run: () => (app.settingsOpen = true) });
     c.push({ label: t('palette.toggleSidebar'), hint: 'Ctrl+Shift+B', icon: 'sidebar', run: () => app.toggleSidebar() });

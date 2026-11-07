@@ -22,6 +22,7 @@ import type { QueryEntry, UsageResult } from './usageQuery.ts';
 import { DEFAULTS, TERMINAL_KEYS, clampSettings, fontStack, hexAlpha, resetSection } from './settings.ts';
 import type { SectionId, Settings } from './settings.ts';
 import { cleanOverride } from './statusbar.ts';
+import { playSound } from './sounds.ts';
 import type { ItemId } from './statusbar.ts';
 import { DEFAULT_THEME, MAX_CUSTOM_THEMES, hasTheme, resolveTheme } from './themes.ts';
 import type { ThemeDef } from './themes.ts';
@@ -30,6 +31,9 @@ import { resolveLanguage, setLocale, t } from './i18n.ts';
 import { SshConn } from './sshconn.ts';
 import type { ConnState } from './sshconn.ts';
 import type { BackupState } from './backup.ts';
+import * as SW from './savedws.ts';
+import type { SavedWorkspace } from './savedws.ts';
+import * as HV from './hostview.ts';
 
 export type { Settings };
 
@@ -85,6 +89,8 @@ class AppState {
   /** Cuentas con una comprobación de sesión en curso. */
   statusChecking = $state<Record<string, boolean>>({});
   workspaces = $state<Workspace[]>([]);
+  /** Espacios guardados con nombre (savedws.ts): se abren como pestañas nuevas. */
+  savedWorkspaces = $state<SavedWorkspace[]>([]);
   activeId = $state('');
   settings = $state<Settings>({ ...DEFAULTS });
   live = $state<Record<string, LiveInfo>>({});
@@ -179,6 +185,7 @@ class AppState {
         this.ignoredDirs = Array.isArray(st.ignoredDirs) ? st.ignoredDirs.filter((d: unknown) => typeof d === 'string') : [];
         this.customThemes = sanitizeCustomThemes(st.customThemes);
       }
+      this.savedWorkspaces = SW.normalizeSaved(st?.savedWorkspaces); // estados de antes: sin la clave = lista vacía
     } catch { /* estado corrupto: se arranca limpio */ }
     // Un tema propio que ya no se puede cargar: se vuelve al de serie sin avisar.
     if (!hasTheme(this.settings.theme, this.customThemes)) this.settings = { ...this.settings, theme: DEFAULT_THEME };
@@ -396,7 +403,7 @@ class AppState {
     const data = $state.snapshot({
       version: 1, workspaces: this.workspaces, activeId: this.activeId,
       hosts: this.hosts, accounts: this.accounts, settings: this.settings, ignoredDirs: this.ignoredDirs,
-      customThemes: this.customThemes,
+      customThemes: this.customThemes, savedWorkspaces: this.savedWorkspaces,
     });
     // Un panel de «Sign in» no debe repetir el login al restaurarse.
     data.workspaces = data.workspaces.map((w) => ({ ...w, panes: w.panes.map((p) => ({ ...p, spec: restorableSpec(p.spec), ...(p.lastSession ? { lastSession: sessionForSave(p.lastSession, this.live[p.id]) } : {}) })) }));
@@ -442,16 +449,20 @@ class AppState {
     if (!ids.length) { this.agents = []; this.subagentView = null; return; }
     try {
       const found = await be.agentScan(ids, this.claudeAccounts.map((a) => a.dir));
+      let needsYou = false, finished = false;
       for (const a of found) {
         const was = this.prevStatus.get(a.paneId);
         const pane = this.paneById(a.paneId);
         const name = pane?.title ?? t('store.agentFallback');
         if (was && was !== a.status) {
-          if (a.status === 'waiting') { if (this.settings.notifyPermission) this.toast(t('store.toast.needsPermission', { name })); }
-          else if (was === 'busy' && a.status === 'idle' && this.settings.notifyDone) this.toast(t('store.toast.finished', { name }));
+          if (a.status === 'waiting') { needsYou = true; if (this.settings.notifyPermission) this.toast(t('store.toast.needsPermission', { name })); }
+          else if (was === 'busy' && a.status === 'idle') { finished = true; if (this.settings.notifyDone) this.toast(t('store.toast.finished', { name })); }
         }
         this.prevStatus.set(a.paneId, a.status);
       }
+      // Un solo sonido por escaneo (pedir permiso gana a terminar); el anti-spam de sounds.ts limita a uno cada 1,5 s.
+      const snd = needsYou ? this.settings.soundAttention : finished ? this.settings.soundDone : 'none';
+      if (snd !== 'none') playSound(snd, this.settings.soundVolume / 100);
       this.agents = found;
       // El visor de un subagente se cierra si su agente ya no existe.
       if (this.subagentView && !found.some((a) => a.paneId === this.subagentView!.paneId)) this.subagentView = null;
@@ -970,7 +981,98 @@ class AppState {
   }
   renameWorkspace(id: string, name: string): void {
     const ws = this.workspaces.find((w) => w.id === id);
-    if (ws && name.trim()) { ws.name = name.trim(); this.persist(); }
+    const n = SW.cleanName(name);
+    if (ws && n) { ws.name = n; this.persist(); } // vacío = se queda el nombre de antes
+  }
+  /** Cierra todas las pestañas menos `id` (y la deja activa). */
+  closeOtherWorkspaces(id: string): void {
+    if (!this.workspaces.some((w) => w.id === id)) return;
+    this.activeId = id;
+    for (const w of [...this.workspaces]) if (w.id !== id) this.closeWorkspace(w.id);
+  }
+
+  // ---------- espacios guardados (lógica pura en savedws.ts) ----------
+
+  /** Carpeta actual de cada panel según su terminal, para guardar dónde está y no dónde arrancó. */
+  private liveCwds(ws: Workspace): Record<string, string | undefined> {
+    return Object.fromEntries(ws.panes.map((p) => [p.id, this.live[p.id]?.cwd]));
+  }
+  private snapshotOf(wsId: string, name: string): SavedWorkspace | null {
+    const ws = this.workspaces.find((w) => w.id === wsId);
+    return ws ? SW.toSaved($state.snapshot(ws) as Workspace, { name, liveCwd: this.liveCwds(ws) }) : null;
+  }
+
+  /** Guarda la pestaña `wsId` como `name`. Con el nombre ya cogido devuelve `conflict` (la interfaz pregunta y vuelve con `overwrite`). */
+  saveWorkspace(wsId: string, name: string, overwrite = false): SW.SaveResult {
+    const snap = this.snapshotOf(wsId, name);
+    if (!snap) return { ok: false, reason: 'empty' };
+    const r = SW.upsertSaved($state.snapshot(this.savedWorkspaces) as SavedWorkspace[], snap, overwrite);
+    if (r.ok) {
+      this.savedWorkspaces = r.list;
+      this.persist();
+      this.toast(t('topbar.saved.toastSaved', { name: r.saved.name }));
+    } else if (r.reason === 'full') this.toast(t('topbar.saved.toastFull', { n: SW.SAVED_LIMITS.count }));
+    return r;
+  }
+  /** Sobrescribe el guardado `savedId` con la pestaña `wsId` (conserva su nombre). */
+  overwriteSavedWorkspace(savedId: string, wsId: string): void {
+    const cur = this.savedWorkspaces.find((s) => s.id === savedId);
+    const snap = this.snapshotOf(wsId, cur?.name ?? '');
+    if (!cur || !snap) return;
+    this.savedWorkspaces = SW.overwriteSaved($state.snapshot(this.savedWorkspaces) as SavedWorkspace[], savedId, snap);
+    this.persist();
+    this.toast(t('topbar.saved.toastSaved', { name: cur.name }));
+  }
+  renameSavedWorkspace(savedId: string, name: string): SW.RenameResult {
+    const r = SW.renameSaved($state.snapshot(this.savedWorkspaces) as SavedWorkspace[], savedId, name);
+    if (r.ok) { this.savedWorkspaces = r.list; this.persist(); }
+    return r;
+  }
+  deleteSavedWorkspace(savedId: string): void {
+    const cur = this.savedWorkspaces.find((s) => s.id === savedId);
+    if (!cur) return;
+    this.savedWorkspaces = SW.deleteSaved($state.snapshot(this.savedWorkspaces) as SavedWorkspace[], savedId);
+    this.persist();
+    this.toast(t('topbar.saved.toastDeleted', { name: cur.name }));
+  }
+
+  /**
+   * Prepara los paneles de una pestaña que sale de un guardado o de «Duplicar»: los de un host toman su acceso vigente y los de
+   * una cuenta se rehacen desde la cuenta (rutas de --settings y --mcp-config de esta sesión). Claude arranca SIEMPRE una
+   * conversación nueva: la de origen puede seguir abierta en otra pestaña y dos paneles en la misma sesión se pisan.
+   */
+  private freshPanes(ws: Workspace): void {
+    for (const p of ws.panes) {
+      this.refreshSshSpec(p);
+      if (p.kind !== 'agent') continue;
+      const acc = this.accountById(p.ref);
+      if (!acc) { p.spec = SW.freshAgentSpec(p.spec); continue; }
+      p.spec = providerOf(acc) === 'claude'
+        ? claudeSpec(acc, { cwd: p.spec.cwd, settingsPath: this.usageSettings || undefined, mcpConfig: this.mcpConfigPath })
+        : providerSpec(acc, { cwd: p.spec.cwd });
+    }
+  }
+  /** Abre un guardado en una pestaña nueva (ids nuevos; el guardado no cambia). */
+  openSavedWorkspace(savedId: string): void {
+    const sw = this.savedWorkspaces.find((s) => s.id === savedId);
+    if (!sw) return;
+    const ws = SW.fromSaved($state.snapshot(sw) as SavedWorkspace);
+    this.freshPanes(ws);
+    this.workspaces.push(ws);
+    this.activeId = ws.id;
+    this.persist();
+  }
+  /** Copia de una pestaña abierta, al lado de la original. */
+  duplicateWorkspace(wsId: string): void {
+    const i = this.workspaces.findIndex((w) => w.id === wsId);
+    if (i < 0) return;
+    const ws = this.workspaces[i];
+    const name = SW.uniqueName(t('topbar.copyName', { name: displayName(ws.name) }), this.workspaces.map((w) => displayName(w.name)));
+    const copy = SW.duplicateWorkspace($state.snapshot(ws) as Workspace, name, this.liveCwds(ws));
+    this.freshPanes(copy);
+    this.workspaces.splice(i + 1, 0, copy);
+    this.activeId = copy.id;
+    this.persist();
   }
   closeWorkspace(id: string): void {
     if (this.workspaces.length <= 1) return;
@@ -994,6 +1096,66 @@ class AppState {
     for (const kind of ['password', 'passphrase'] as const) void be.secretDelete(hostSecretKey(id, kind)).catch(() => {});
     this.persist();
   }
+
+  // ---------- hosts: carpetas y orden (lógica pura en hostview.ts) ----------
+
+  private hostsPlain(): Host[] { return $state.snapshot(this.hosts) as Host[]; }
+  /** Antes de reordenar a mano: con orden A-Z se guarda ese A-Z como manual y se pasa a Manual (nada salta de sitio) y se avisa. */
+  private manualBase(): { hosts: Host[]; folders: string[] } {
+    const hosts = this.hostsPlain();
+    const folders = [...this.settings.hostFolders];
+    if (this.settings.hostsSort === 'manual') return { hosts, folders };
+    const f = HV.freezeOrder(hosts, folders, this.settings.hostsSort);
+    this.patchSettings({ hostsSort: 'manual', hostFolders: f.folders });
+    this.toast(t('store.toast.hostsSortManual'));
+    return f;
+  }
+  /** Guarda los hosts reordenados. Las carpetas que había se quedan en la lista aunque se vacíen (no desaparecen al sacar su
+   *  último host; se borran con «Borrar carpeta»). */
+  private setHostsOrder(before: { hosts: Host[]; folders: string[] }, next: Host[]): void {
+    this.hosts = next;
+    this.setting('hostFolders', HV.folderOrder(next, HV.folderOrder(before.hosts, before.folders)));
+    this.persist();
+  }
+  /** Arrastrar y soltar: el host va a `folder` antes de `beforeId` (null = al final de la carpeta). */
+  moveHostTo(id: string, folder: string, beforeId: string | null): void {
+    const b = this.manualBase();
+    this.setHostsOrder(b, HV.moveHost(b.hosts, id, folder, beforeId));
+  }
+  /** Alt+↑/↓ o «Subir» / «Bajar». */
+  stepHost(id: string, dir: -1 | 1): void {
+    const b = this.manualBase();
+    this.setHostsOrder(b, HV.stepHost(b.hosts, b.folders, id, dir));
+  }
+  moveHostFolder(name: string, before: string | null): void {
+    const b = this.manualBase();
+    this.setting('hostFolders', HV.moveFolder(b.hosts, b.folders, name, before));
+  }
+  stepHostFolder(name: string, dir: -1 | 1): void {
+    const b = this.manualBase();
+    this.setting('hostFolders', HV.stepFolder(b.hosts, b.folders, name, dir));
+  }
+  /** Crea una carpeta vacía al final con un nombre libre y lo devuelve (la barra lo pone a renombrar). */
+  newHostFolder(): string {
+    const hosts = this.hostsPlain();
+    const name = HV.freeFolderName(hosts, this.settings.hostFolders, t('sidebar.ssh.folder.newName'));
+    this.patchSettings({ hostFolders: HV.addFolder(hosts, this.settings.hostFolders, name), hostFoldersCollapsed: this.settings.hostFoldersCollapsed.filter((g) => g !== name) });
+    return name;
+  }
+  renameHostFolder(from: string, to: string): void {
+    const r = HV.renameFolder(this.hostsPlain(), this.settings.hostFolders, this.settings.hostFoldersCollapsed, from, to);
+    this.hosts = r.hosts;
+    this.patchSettings({ hostFolders: r.folders, hostFoldersCollapsed: r.collapsed });
+    this.persist();
+  }
+  /** Borra la carpeta; sus hosts pasan a «sin carpeta» (nunca se borran). */
+  deleteHostFolder(name: string): void {
+    const r = HV.deleteFolder(this.hostsPlain(), this.settings.hostFolders, this.settings.hostFoldersCollapsed, name);
+    this.hosts = r.hosts;
+    this.patchSettings({ hostFolders: r.folders, hostFoldersCollapsed: r.collapsed });
+    this.persist();
+  }
+  toggleHostFolder(name: string): void { this.setting('hostFoldersCollapsed', HV.toggleCollapsed(this.settings.hostFoldersCollapsed, name)); }
 
   /** Convierte en hosts de la bóveda las entradas de ~/.ssh/config que aún no lo son. */
   importSshConfig(): number {
@@ -1155,7 +1317,7 @@ class AppState {
   backupState(): BackupState {
     return $state.snapshot({
       settings: this.settings, hosts: this.hosts, accounts: this.accounts, customThemes: this.customThemes,
-      workspaces: this.workspaces, activeId: this.activeId, ignoredDirs: this.ignoredDirs,
+      workspaces: this.workspaces, activeId: this.activeId, ignoredDirs: this.ignoredDirs, savedWorkspaces: this.savedWorkspaces,
     }) as BackupState;
   }
 
@@ -1170,6 +1332,7 @@ class AppState {
     this.accounts = next.accounts;
     this.ignoredDirs = next.ignoredDirs;
     this.workspaces = next.workspaces;
+    if (next.savedWorkspaces) this.savedWorkspaces = SW.normalizeSaved(next.savedWorkspaces);
     this.activeId = next.workspaces.some((w) => w.id === next.activeId) ? next.activeId : next.workspaces[0].id;
     for (const w of this.workspaces) for (const p of w.panes) this.refreshSshSpec(p); // como al arrancar: los paneles de un host toman su método de acceso
     this.replaceSettings(next.settings);

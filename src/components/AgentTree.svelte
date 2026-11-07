@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { fly } from 'svelte/transition';
   import { app } from '../lib/store.svelte.ts';
   import type { AgentInfo, Tokens } from '../lib/backend.ts';
@@ -8,6 +8,9 @@
   import Icon from './Icon.svelte';
   import { gitState } from '../lib/gitstate.svelte.ts';
   import { truncateBranch } from '../lib/gitinfo.ts';
+  import AgentCard from './AgentCard.svelte';
+  import { trackStatus } from '../lib/agentcard.ts';
+  import type { StatusMark } from '../lib/agentcard.ts';
 
   let now = $state(Date.now() / 1000);
   let closed = $state<Record<string, boolean>>({});
@@ -15,8 +18,67 @@
   let armTimer = 0;
   const dur = (ms: number) => (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
   onMount(() => {
-    const t = setInterval(() => (now = Date.now() / 1000), 5000);
-    return () => { clearInterval(t); clearTimeout(armTimer); };
+    // Con la ficha abierta, el reloj va por segundos (duraciones); si no, cada 5 s basta para la caché.
+    const t = setInterval(() => { if (card || Date.now() / 1000 - now >= 5) now = Date.now() / 1000; }, 1000);
+    // Cualquier scroll (barra lateral incluida; el evento no burbujea, por eso en captura) deja la fila en otro sitio.
+    const onScroll = () => { if (card) hideCard(); };
+    window.addEventListener('scroll', onScroll, true);
+    // Esc en captura: la terminal enfocada (xterm) se queda la tecla y no la deja burbujear.
+    window.addEventListener('keydown', onKey, true);
+    return () => { clearInterval(t); clearTimeout(armTimer); clearTimeout(openTimer); clearTimeout(closeTimer); window.removeEventListener('scroll', onScroll, true); window.removeEventListener('keydown', onKey, true); };
+  });
+
+  // ---------- ficha flotante (AgentCard) ----------
+  /** Desde cuándo está cada agente en su estado: se actualiza con cada escaneo, aunque la ficha esté cerrada. */
+  let marks = $state<Record<string, StatusMark>>({});
+  $effect(() => {
+    const list = app.agents;
+    marks = trackStatus(untrack(() => marks), list, Date.now() / 1000);
+  });
+  /** Ficha abierta: panel del agente y rectángulo de su fila. Solo una a la vez. */
+  let card = $state<{ id: string; top: number; bottom: number; sideRight: number } | null>(null);
+  let openTimer = 0;
+  let closeTimer = 0;
+  /** Tras Esc no se vuelve a abrir la del mismo agente hasta que el ratón salga de él. */
+  let dismissed: string | null = null;
+  const CLOSE_GRACE_MS = 150;
+
+  function show(id: string, rowEl: HTMLElement) {
+    const r = rowEl.getBoundingClientRect();
+    const side = rowEl.closest('aside')?.getBoundingClientRect().right ?? r.right;
+    card = { id, top: r.top, bottom: r.bottom, sideRight: side };
+  }
+  function enterAgent(id: string, rowEl: HTMLElement | null) {
+    clearTimeout(closeTimer);
+    if (!app.settings.agentCard || !rowEl || dismissed === id) return;
+    if (card?.id === id) return;
+    clearTimeout(openTimer);
+    // Si ya hay otra ficha abierta, se cambia al momento (no hace falta volver a esperar).
+    if (card) { show(id, rowEl); return; }
+    openTimer = window.setTimeout(() => show(id, rowEl), app.settings.agentCardDelayMs);
+  }
+  function leaveAgent(id: string) {
+    clearTimeout(openTimer);
+    if (dismissed === id) dismissed = null;
+    clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(() => (card = null), CLOSE_GRACE_MS);
+  }
+  function hideCard() { clearTimeout(openTimer); clearTimeout(closeTimer); card = null; }
+  /** Teclado: al enfocar la fila con Tab se abre en el acto. */
+  function focusAgent(e: FocusEvent, id: string, rowEl: HTMLElement | null) {
+    const tgt = e.target as HTMLElement;
+    if (!app.settings.agentCard || !rowEl || !tgt.matches(':focus-visible')) return;
+    clearTimeout(closeTimer);
+    show(id, rowEl);
+  }
+  function onKey(e: KeyboardEvent) {
+    // Se la queda: con la ficha abierta, Esc solo la cierra (en la terminal de Claude, Esc interrumpiría al agente).
+    if (e.key === 'Escape' && card) { e.preventDefault(); e.stopPropagation(); dismissed = card.id; hideCard(); }
+  }
+  const rows: Record<string, HTMLElement> = {};
+  // Si el agente desaparece o se apaga el ajuste, la ficha se va.
+  $effect(() => {
+    if (card && (!app.settings.agentCard || !app.agents.some((a) => a.paneId === card?.id))) card = null;
   });
 
   /** Cierra el panel del agente; con «confirmClose» hace falta un segundo clic (igual que el botón del panel). */
@@ -56,12 +118,17 @@
   {#each app.agents as a (a.paneId)}
     {@const acc = accountOf(a)}
     {@const c = cache(a)}
-    <div class="ag" class:wait={a.status === 'waiting'} in:fly={{ x: -10, duration: dur(150) }}>
-      <div class="row">
+    <div class="ag" class:wait={a.status === 'waiting'} in:fly={{ x: -10, duration: dur(150) }}
+      role="group"
+      onpointerenter={() => enterAgent(a.paneId, rows[a.paneId])}
+      onpointerleave={() => leaveAgent(a.paneId)}
+      onfocusin={(e) => focusAgent(e, a.paneId, rows[a.paneId])}
+      onfocusout={() => leaveAgent(a.paneId)}>
+      <div class="row" bind:this={rows[a.paneId]}>
         <button class="chev" onclick={() => (closed[a.paneId] = !closed[a.paneId])} aria-label={t('agents.collapseAria')}>
           <Icon name={closed[a.paneId] ? 'right' : 'down'} size={11} />
         </button>
-        <button class="main" onclick={() => app.focusPane(a.paneId)} title={t('agents.goToTitle')}>
+        <button class="main" onclick={() => { hideCard(); app.focusPane(a.paneId); }} title={app.settings.agentCard ? undefined : t('agents.goToTitle')}>
           <span class="st" class:busy={a.status === 'busy'} class:waiting={a.status === 'waiting'} class:idle={a.status === 'idle'}></span>
           <span class="txt">
             <span class="name">{label(a)}</span>
@@ -80,12 +147,12 @@
           {#if a.current}<div class="cur"><Icon name="bolt" size={11} /> {a.current}</div>{/if}
           <div class="meta">
             {#if a.ctxTokens}<span>{t('agents.ctx', { n: k(a.ctxTokens) })}</span>{/if}
-            {#if c}<span class="cache {c.cls}" title={t('agents.cache.ttlTitle', { min: a.cacheTtl / 60 })}>{c.text}</span>{/if}
+            {#if c}<span class="cache {c.cls}" title={app.settings.agentCard ? undefined : t('agents.cache.ttlTitle', { min: a.cacheTtl / 60 })}>{c.text}</span>{/if}
           </div>
 
           <!-- Los tokens del agente principal (contexto, ↑ entrada, ↓ salida) están en la cabecera de su panel. -->
           {#if a.subTokens?.requests}
-            <div class="tok sub" title={t('agents.subTokens.title', { requests: a.subTokens.requests, fresh: k(fresh(a.subTokens)), cached: k(a.subTokens.cacheRead) })}>
+            <div class="tok sub" title={app.settings.agentCard ? undefined : t('agents.subTokens.title', { requests: a.subTokens.requests, fresh: k(fresh(a.subTokens)), cached: k(a.subTokens.cacheRead) })}>
               <span>{t('agents.subTokens.label')}</span>
               <span>{t('agents.tokens.out', { n: k(a.subTokens.output) })}</span>
               <span class="dim">{t('agents.subTokens.requests', { n: k(a.subTokens.requests) })}</span>
@@ -123,6 +190,28 @@ ${t('agents.sub.openTitle')}`}>
     </div>
   {/each}
 </div>
+
+{#if card}
+  {@const ca = app.agents.find((x) => x.paneId === card?.id)}
+  {#if ca}
+    {@const acc = accountOf(ca)}
+    <AgentCard
+      a={ca}
+      label={label(ca)}
+      anchor={{ top: card.top, bottom: card.bottom }}
+      sideRight={card.sideRight}
+      account={acc ? { name: acc.name, color: acc.color } : undefined}
+      cache={cache(ca)}
+      branch={gitState.byPane[ca.paneId]?.branch ?? undefined}
+      mark={marks[ca.paneId]}
+      compactAt={app.settings.autoCompact && ca.agent === 'claude' ? app.settings.autoCompactCtxK * 1000 : null}
+      statusText={statusLabel(ca.status)}
+      {now}
+      onenter={() => clearTimeout(closeTimer)}
+      onleave={() => leaveAgent(ca.paneId)}
+    />
+  {/if}
+{/if}
 
 <style>
   .ag { margin: 2px 6px 4px; border-radius: 7px; border: 1px solid transparent; }

@@ -89,7 +89,7 @@
     mode = 'merge';
     picks = {
       settings: r.summary.hasSettings, hosts: r.summary.hosts > 0, accounts: r.summary.accounts > 0,
-      themes: r.summary.themes > 0, workspaces: r.summary.workspaces > 0,
+      themes: r.summary.themes > 0, workspaces: r.summary.workspaces + r.summary.saved > 0,
     };
     bMsg = null;
   }
@@ -120,8 +120,8 @@
     // Reemplazar espacios de trabajo: sus terminales se cierran y las del archivo se lanzan al montarse (sin recargar la ventana).
     const closing = mode === 'replace' && chosen.workspaces && sections.workspaces.length ? cur.workspaces.flatMap((w) => w.panes.map((p) => p.id)) : [];
     app.applyBackupState(state, closing);
-    const skipped = report.hostsSkipped + report.accountsSkipped + report.themesSkipped + report.workspacesSkipped;
-    const vars = { hosts: report.hostsAdded, accounts: report.accountsAdded, themes: report.themesAdded, workspaces: report.workspacesAdded, panes: report.panesAdded, skipped };
+    const skipped = report.hostsSkipped + report.accountsSkipped + report.themesSkipped + report.workspacesSkipped + report.savedSkipped;
+    const vars = { hosts: report.hostsAdded, accounts: report.accountsAdded, themes: report.themesAdded, workspaces: report.workspacesAdded, panes: report.panesAdded, saved: report.savedAdded, skipped };
     const head = t(mode === 'merge' ? 'settings.data.backup.doneMerge' : 'settings.data.backup.doneReplace', vars);
     bMsg = { ok: true, text: report.settings ? `${head} ${t('settings.data.backup.doneSettings')}` : head };
     discardBackup();
@@ -131,7 +131,7 @@
     { id: 'hosts', label: t('settings.data.backup.secHosts', { n: parsed.summary.hosts }), n: parsed.summary.hosts },
     { id: 'accounts', label: t('settings.data.backup.secAccounts', { n: parsed.summary.accounts }), n: parsed.summary.accounts },
     { id: 'themes', label: t('settings.data.backup.secThemes', { n: parsed.summary.themes }), n: parsed.summary.themes },
-    { id: 'workspaces', label: t('settings.data.backup.secWorkspaces', { n: parsed.summary.workspaces, panes: parsed.summary.panes }), n: parsed.summary.workspaces },
+    { id: 'workspaces', label: t('settings.data.backup.secWorkspaces', { n: parsed.summary.workspaces, panes: parsed.summary.panes, saved: parsed.summary.saved }), n: parsed.summary.workspaces + parsed.summary.saved },
   ] as { id: BackupSection; label: string; n: number }[]) : []);
   const canApply = $derived(!!parsed && anyPicked(parsed.sections, picks));
 
@@ -201,7 +201,7 @@
         </button>
       </div>
 
-      {#if picks.workspaces && parsed.summary.workspaces > 0}
+      {#if picks.workspaces && parsed.summary.workspaces + parsed.summary.saved > 0}
         <p class="s-msg err" role="alert">{t('settings.data.backup.warnPanes')}</p>
       {/if}
       {#if picks.hosts && parsed.summary.hostsWithCommand > 0}

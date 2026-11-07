@@ -69,7 +69,7 @@ test('round trip: lo exportado se lee igual (menos secretos y estado vivo)', () 
   assert.ok(r.ok);
   const s = stateA();
   assert.deepEqual(r.summary, {
-    hosts: 2, accounts: 2, themes: 1, workspaces: 2, panes: 4, hasSettings: true, droppedPanes: 0, droppedHosts: 0, hostsWithCommand: 2,
+    hosts: 2, accounts: 2, themes: 1, workspaces: 2, panes: 4, saved: 0, hasSettings: true, droppedPanes: 0, droppedHosts: 0, hostsWithCommand: 2,
     appVersion: '0.1.0', exportedAt: '2026-11-06T12:00:00.000Z',
   });
   const expHosts = s.hosts.map((h) => { const { hasPassword: _a, hasPassphrase: _b, ...rest } = h; return rest; });
@@ -323,7 +323,7 @@ test('mezclar la copia en un estado vacío lo añade todo, con ids intactos', ()
   assert.equal(state.settings.theme, 'custom:night');
   assert.deepEqual(report, {
     mode: 'merge', settings: true, hostsAdded: 2, hostsSkipped: 0, accountsAdded: 2, accountsSkipped: 0, themesAdded: 1, themesSkipped: 0,
-    workspacesAdded: 2, workspacesSkipped: 0, panesAdded: 4,
+    workspacesAdded: 2, workspacesSkipped: 0, panesAdded: 4, savedAdded: 0, savedSkipped: 0,
   });
 });
 

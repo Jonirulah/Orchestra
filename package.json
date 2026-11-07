@@ -3,7 +3,7 @@
   "private": true,
   "license": "MIT",
   "description": "Terminal, SSH and AI-agent manager for Windows (Tauri 2 + Svelte 5 + xterm.js)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

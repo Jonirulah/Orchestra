@@ -2,11 +2,20 @@
   import { app } from '../lib/store.svelte.ts';
   import { POLICIES } from '../lib/policy.ts';
   import { LIMITS } from '../lib/settings.ts';
-  import { t } from '../lib/i18n.ts';
+  import { t, tk } from '../lib/i18n.ts';
   import Toggle from './Toggle.svelte';
   import Slider from './Slider.svelte';
+  import { SOUND_IDS, playSound } from '../lib/sounds.ts';
+  import type { SoundId } from '../lib/sounds.ts';
 
   const s = $derived(app.settings);
+
+  // ▶ se salta el anti-spam: es el usuario quien lo pide.
+  const preview = (id: SoundId) => playSound(id, s.soundVolume / 100, true);
+  const soundRows = $derived([
+    { key: 'soundAttention', label: t('settings.agents.soundAttentionLabel'), hint: t('settings.agents.soundAttentionHint') },
+    { key: 'soundDone', label: t('settings.agents.soundDoneLabel'), hint: t('settings.agents.soundDoneHint') },
+  ] as const);
 
   // Encender la consulta pide una confirmación explícita (lee el token de cada cuenta). Apagarla es inmediato.
   let confirming = $state(false);
@@ -55,6 +64,23 @@
 <div class="s-row">
   <div class="lbl"><b>{t('settings.agents.notifyDoneLabel')}</b></div>
   <div class="ctl"><Toggle value={s.notifyDone} label={t('settings.agents.notifyDoneLabel')} onchange={(v) => app.setting('notifyDone', v)} /></div>
+</div>
+
+{#each soundRows as { key, label, hint } (key)}
+  <div class="s-row">
+    <div class="lbl"><b>{label}</b><small>{hint}</small></div>
+    <div class="ctl snd">
+      <select value={s[key]} aria-label={label} onchange={(e) => app.setting(key, e.currentTarget.value as SoundId)}>
+        {#each SOUND_IDS as id (id)}<option value={id}>{tk(`settings.agents.sound.${id}`)}</option>{/each}
+      </select>
+      <button type="button" class="btn ghost small" disabled={s[key] === 'none' || s.soundVolume === 0} title={t('settings.agents.soundPreview')} aria-label={t('settings.agents.soundPreview')} onclick={() => preview(s[key])}>▶</button>
+    </div>
+  </div>
+{/each}
+
+<div class="s-row">
+  <div class="lbl"><b>{t('settings.agents.soundVolumeLabel')}</b></div>
+  <div class="ctl"><Slider value={s.soundVolume} min={LIMITS.soundVolume[0]} max={LIMITS.soundVolume[1]} step={5} unit=" %" onchange={(v) => app.setting('soundVolume', v)} /></div>
 </div>
 
 <div class="s-row">
@@ -119,6 +145,18 @@
 </div>
 
 <div class="s-row">
+  <div class="lbl"><b>{t('settings.agents.cardLabel')}</b><small>{t('settings.agents.cardHint')}</small></div>
+  <div class="ctl"><Toggle value={s.agentCard} label={t('settings.agents.cardLabel')} onchange={(v) => app.setting('agentCard', v)} /></div>
+</div>
+
+{#if s.agentCard}
+  <div class="s-row">
+    <div class="lbl"><b>{t('settings.agents.cardDelayLabel')}</b><small>{t('settings.agents.cardDelayHint')}</small></div>
+    <div class="ctl"><Slider value={s.agentCardDelayMs} min={LIMITS.agentCardDelayMs[0]} max={LIMITS.agentCardDelayMs[1]} step={100} unit=" ms" onchange={(v) => app.setting('agentCardDelayMs', v)} /></div>
+  </div>
+{/if}
+
+<div class="s-row">
   <div class="lbl">
     <b>{t('settings.agents.autoCompactLabel')} <span class="hint">{t('settings.agents.experimental')}</span></b>
     <small>{@html t('settings.agents.autoCompactHint', { after: s.autoCompactAfterMin })}</small>
@@ -158,6 +196,7 @@
 </div>
 
 <style>
+  .snd select { width: 200px; }
   .compact-log { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
   .uq-acts { display: flex; gap: 8px; }
   .uq-head { margin: 18px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }

@@ -5,8 +5,11 @@
   import * as be from '../lib/backend.ts';
   import { ACCOUNT_COLORS, hostSecretKey } from '../lib/model.ts';
   import type { Host } from '../lib/model.ts';
+  import { folderOrder } from '../lib/hostview.ts';
 
   let h = $state<Host>({ ...app.hostDialog!, tags: [...app.hostDialog!.tags] });
+  /** Carpetas que ya existen (en el orden de la barra), para proponerlas en el campo «Carpeta». */
+  const folders = folderOrder(app.hosts, app.settings.hostFolders);
   let tagsText = $state(h.tags.join(', '));
   const exists = $derived(app.hosts.some((x) => x.id === h.id));
   const valid = $derived(h.host.trim().length > 0);
@@ -84,7 +87,8 @@
     <div class="body">
       <div class="row2">
         <label class="field"><span>{t('host.dialog.nameLabel')}</span><input bind:value={h.name} placeholder={t('host.dialog.namePlaceholder')} /></label>
-        <label class="field"><span>{t('host.dialog.groupLabel')}</span><input bind:value={h.group} placeholder={t('host.dialog.groupPlaceholder')} /></label>
+        <label class="field"><span>{t('host.dialog.groupLabel')}</span><input bind:value={h.group} placeholder={t('host.dialog.groupPlaceholder')} list="host-folders" autocomplete="off" />
+          <datalist id="host-folders">{#each folders as f (f)}<option value={f}></option>{/each}</datalist></label>
       </div>
       <div class="row2">
         <label class="field"><span>{t('host.dialog.hostLabel')}</span><input bind:value={h.host} placeholder={t('host.dialog.hostPlaceholder')} /></label>

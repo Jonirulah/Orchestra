@@ -1,6 +1,7 @@
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { UsageResult } from './usageQuery.ts';
+import { demoHistory, type HistPoint } from './history.ts';
 
 export const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -335,6 +336,8 @@ export interface AgentInfo {
   lastRequestAt?: number; cacheTtl: number;
   tokens: Tokens; subTokens: Tokens;
   todos: AgentTodo[]; subagents: AgentSub[];
+  /** Modelo de la última respuesta, último pedido del usuario (recortado), inicio de la sesión (epoch s) y herramienta que espera permiso. */
+  model?: string; lastPrompt?: string; startedAt?: number; waitingFor?: string;
 }
 
 /** ¿Existe la transcripción `<id>.jsonl` de esa sesión bajo `<dir>/projects`? (`dir` = carpeta de una cuenta guardada, `id` = UUID.) Solo mira que exista. */
@@ -348,8 +351,13 @@ export async function agentScan(ids: string[], dirs: string[]): Promise<AgentInf
   const now = Math.floor(Date.now() / 1000);
   return ids.slice(0, 2).map((id, i): AgentInfo => ({
     paneId: id, agent: 'claude', pid: 1000 + i, status: i === 0 ? 'busy' : 'waiting',
-    title: i === 0 ? 'Maps -3-4-5-6' : 'SSH terminal manager', cwd: 'C:/Users/demo', ctxTokens: i === 0 ? 289000 : 121000,
+    title: i === 0 ? 'Maps -3-4-5-6' : 'SSH terminal manager', cwd: i === 0 ? 'C:/Users/demo/code/maps' : 'C:/Users/demo', ctxTokens: i === 0 ? 289000 : 121000,
     current: i === 0 ? 'Bash: cargo test --release' : undefined, lastRequestAt: now - (i === 0 ? 120 : 3300), cacheTtl: 3600,
+    configDir: i === 0 ? 'C:/Users/demo/.claude' : 'C:/Users/demo/.claude-b',
+    model: i === 0 ? 'claude-opus-5-5' : 'claude-sonnet-5-5', startedAt: now - (i === 0 ? 2 * 3600 + 840 : 3 * 3600 + 20 * 60),
+    lastPrompt: i === 0 ? 'Make the parser handle multi-line strings and add tests with the real transcripts from last week'
+      : 'Add an SSH host list with a ping badge next to each name',
+    waitingFor: i === 0 ? undefined : 'Bash: ssh-keygen -t ed25519 -f ~/.ssh/orchestra',
     tokens: i === 0 ? { input: 2400, output: 1521000, cacheRead: 230356000, cacheCreate: 4706000, thinking: 312000, requests: 927 }
       : { input: 900, output: 210000, cacheRead: 18000000, cacheCreate: 900000, thinking: 100000, requests: 140 },
     subTokens: i === 0 ? { input: 0, output: 16300000, cacheRead: 2360000000, cacheCreate: 31000000, thinking: 0, requests: 16466 }
@@ -468,8 +476,13 @@ export async function metricsSample(): Promise<import('./statusbar.ts').Metrics>
     uptime: 3 * 86400 + 5 * 3600 + Math.floor(t % 3600), hostname: 'demo-host',
   };
 }
-/** Suelta el muestreador del lado Rust (al apagar la barra). */
+/** Suelta el muestreador del lado Rust (al apagar la barra); también para y vacía el histórico. */
 export function metricsReset(): void { if (inTauri) void invoke('metrics_reset'); }
+/** Última hora de métricas locales (un punto cada ~5 s). En modo demo: 42 min inventados, con un hueco. */
+export async function metricsHistory(): Promise<HistPoint[]> {
+  if (inTauri) return invoke('metrics_history');
+  return demoHistory(Date.now() / 1000, 42, { seed: 1, ramGB: 32 });
+}
 
 // ---------- métricas del servidor por SSH (ver remote_metrics.rs y remotemetrics.ts) ----------
 /** Un panel SSH vivo más de este destino: crea (o reutiliza) el monitor. Devuelve su clave. */
@@ -481,6 +494,12 @@ export async function rmetricsStart(req: import('./remotemetrics.ts').RmReq): Pr
 export function rmetricsStop(key: string): void { if (inTauri) void invoke('rmetrics_stop', { key }); }
 /** Ventana oculta/visible: oculta más de 60 s suelta el enlace. */
 export function rmetricsHidden(hidden: boolean): void { if (inTauri) void invoke('rmetrics_hidden', { hidden }); }
+/** Última hora del servidor de este monitor (vacío si no existe). En modo demo: una hora inventada, sin swap. */
+export async function rmetricsHistory(key: string): Promise<HistPoint[]> {
+  if (inTauri) return invoke('rmetrics_history', { key });
+  if (key.includes('@bad.')) return [];
+  return demoHistory(Date.now() / 1000, 60, { seed: 4, swap: false, ramGB: 16 });
+}
 /** Última muestra del monitor. En modo demo es inventada (un servidor Linux de 8 núcleos). */
 export async function rmetricsSample(key: string): Promise<import('./statusbar.ts').RemoteSnap> {
   if (inTauri) return invoke('rmetrics_sample', { key });

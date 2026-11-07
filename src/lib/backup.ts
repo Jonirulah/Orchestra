@@ -13,6 +13,8 @@ import { DEFAULT_THEME, MAX_CUSTOM_THEMES, hasTheme } from './themes.ts';
 import type { ThemeDef } from './themes.ts';
 import { sanitizeCustomThemes, withUniqueIds } from './themeimport.ts';
 import { t } from './i18n.ts';
+import { mergeSaved, normalizeSaved, SAVED_LIMITS } from './savedws.ts';
+import type { SavedWorkspace } from './savedws.ts';
 
 export const BACKUP_APP = 'orchestra-backup';
 export const BACKUP_FORMAT = 1;
@@ -38,6 +40,8 @@ export interface BackupState {
   workspaces: Workspace[];
   activeId: string;
   ignoredDirs: string[];
+  /** Espacios guardados (savedws.ts). Opcional: los estados y copias de antes no lo traen. */
+  savedWorkspaces?: SavedWorkspace[];
 }
 
 export interface BackupFile {
@@ -52,6 +56,7 @@ export interface BackupFile {
   workspaces: Workspace[];
   activeId: string;
   ignoredDirs: string[];
+  savedWorkspaces: SavedWorkspace[];
 }
 
 /** Ya validado y limpio: lo que ofrece el diálogo de importación. */
@@ -63,6 +68,8 @@ export interface BackupSections {
   workspaces: Workspace[];
   activeId?: string;
   ignoredDirs: string[];
+  /** Ausente = el archivo es de antes de los espacios guardados (al sustituir, los actuales se quedan). */
+  savedWorkspaces?: SavedWorkspace[];
 }
 
 export interface BackupSummary {
@@ -71,6 +78,8 @@ export interface BackupSummary {
   themes: number;
   workspaces: number;
   panes: number;
+  /** Espacios guardados que trae. */
+  saved: number;
   hasSettings: boolean;
   /** Paneles descartados por no pasar la validación (programa, argumentos o entorno absurdos). */
   droppedPanes: number;
@@ -94,6 +103,7 @@ export interface BackupReport {
   themesAdded: number; themesSkipped: number;
   workspacesAdded: number; workspacesSkipped: number;
   panesAdded: number;
+  savedAdded: number; savedSkipped: number;
 }
 
 // ---------- utilidades ----------
@@ -363,6 +373,8 @@ export function buildBackup(state: BackupState, meta: { appVersion: string; now?
     app: BACKUP_APP, format: BACKUP_FORMAT, appVersion: meta.appVersion, exportedAt: (meta.now ?? new Date()).toISOString(),
     settings, hosts, accounts, customThemes: clone(state.customThemes), workspaces,
     activeId: state.activeId, ignoredDirs: state.ignoredDirs.filter((d) => typeof d === 'string'),
+    // Ya vienen sin ids vivos, sin sesión de Claude y sin entorno secreto (savedws.ts); normalizeSaved lo vuelve a garantizar.
+    savedWorkspaces: normalizeSaved(clone(state.savedWorkspaces ?? [])),
   });
 }
 
@@ -397,6 +409,7 @@ export function parseBackup(input: string): ParseBackupResult {
   if (!themesRaw) return fail(t('settings.data.backup.errTooMany', { what: 'themes' }));
   if (!dirsRaw) return fail(t('settings.data.backup.errTooMany', { what: 'ignoredDirs' }));
   if (!wsRaw) return fail(t('settings.data.backup.errTooMany', { what: 'workspaces' }));
+  if (Array.isArray(raw.savedWorkspaces) && raw.savedWorkspaces.length > SAVED_LIMITS.count) return fail(t('settings.data.backup.errTooMany', { what: 'savedWorkspaces' }));
 
   let ws: WsResult;
   try { ws = sanitizeWorkspaces(wsRaw); } catch { return fail(t('settings.data.backup.errTooMany', { what: 'panes' })); }
@@ -422,15 +435,17 @@ export function parseBackup(input: string): ParseBackupResult {
     ignoredDirs: dirsRaw.filter((d): d is string => typeof d === 'string').map((d) => d.slice(0, 500)),
   };
   if (typeof raw.activeId === 'string' && ws.workspaces.some((w) => w.id === raw.activeId)) sections.activeId = raw.activeId;
+  if (Array.isArray(raw.savedWorkspaces)) sections.savedWorkspaces = normalizeSaved(raw.savedWorkspaces);
 
   const summary: BackupSummary = {
     hosts: hosts.length, accounts: sections.accounts.length, themes: sections.customThemes.length,
     workspaces: ws.workspaces.length, panes: ws.workspaces.reduce((n, w) => n + w.panes.length, 0),
+    saved: sections.savedWorkspaces?.length ?? 0,
     hasSettings: sections.settings !== null, droppedPanes: ws.dropped, droppedHosts,
     hostsWithCommand: hosts.filter((h) => h.command || h.proxyJump).length,
     appVersion: text(raw.appVersion, 30) ?? '?', exportedAt: text(raw.exportedAt, 40) ?? '',
   };
-  if (!summary.hasSettings && !summary.hosts && !summary.accounts && !summary.themes && !summary.workspaces) {
+  if (!summary.hasSettings && !summary.hosts && !summary.accounts && !summary.themes && !summary.workspaces && !summary.saved) {
     return fail(t('settings.data.backup.errNothing'));
   }
   return { ok: true, summary, sections };
@@ -445,6 +460,7 @@ function emptyReport(mode: BackupReport['mode']): BackupReport {
   return {
     mode, settings: false, hostsAdded: 0, hostsSkipped: 0, accountsAdded: 0, accountsSkipped: 0,
     themesAdded: 0, themesSkipped: 0, workspacesAdded: 0, workspacesSkipped: 0, panesAdded: 0,
+    savedAdded: 0, savedSkipped: 0,
   };
 }
 
@@ -457,7 +473,7 @@ function importedSettings(cur: Settings, imp: Settings, themes: readonly ThemeDe
   return s;
 }
 
-function remapPane(p: Pane, hostMap: Map<string, string>, accMap: Map<string, string>): void {
+function remapPane(p: Pick<Pane, 'ref' | 'kind' | 'spec'>, hostMap: Map<string, string>, accMap: Map<string, string>): void {
   if (p.ref && p.kind === 'ssh' && hostMap.has(p.ref)) p.ref = hostMap.get(p.ref);
   if (p.ref && p.kind === 'agent' && accMap.has(p.ref)) {
     const old = p.ref;
@@ -546,6 +562,13 @@ export function mergeBackup(current: BackupState, backup: BackupSections, picks:
       report.workspacesAdded++;
       report.panesAdded += w.panes.length;
     }
+    if (src.savedWorkspaces?.length) {
+      for (const s of src.savedWorkspaces) for (const p of s.panes) remapPane(p, hostMap, accMap);
+      const m = mergeSaved(state.savedWorkspaces ?? [], src.savedWorkspaces);
+      state.savedWorkspaces = m.list;
+      report.savedAdded = m.added;
+      report.savedSkipped = m.skipped;
+    }
   }
 
   if (picks.settings && src.settings) {
@@ -591,6 +614,10 @@ export function replaceFromBackup(current: BackupState, backup: BackupSections, 
     report.workspacesAdded = src.workspaces.length;
     report.panesAdded = src.workspaces.reduce((n, w) => n + w.panes.length, 0);
   }
+  if (picks.workspaces && src.savedWorkspaces) {
+    state.savedWorkspaces = src.savedWorkspaces;
+    report.savedAdded = src.savedWorkspaces.length;
+  }
   if (picks.settings && src.settings) {
     state.settings = importedSettings(current.settings, src.settings, state.customThemes, new Map());
     report.settings = true;
@@ -603,5 +630,5 @@ export function replaceFromBackup(current: BackupState, backup: BackupSections, 
 /** ¿Hay algo que aplicar con estas casillas? (el botón se apaga si no). */
 export function anyPicked(sections: BackupSections, picks: BackupPicks): boolean {
   return (picks.settings && !!sections.settings) || (picks.hosts && sections.hosts.length > 0) || (picks.accounts && sections.accounts.length > 0)
-    || (picks.themes && sections.customThemes.length > 0) || (picks.workspaces && sections.workspaces.length > 0);
+    || (picks.themes && sections.customThemes.length > 0) || (picks.workspaces && (sections.workspaces.length > 0 || (sections.savedWorkspaces?.length ?? 0) > 0));
 }

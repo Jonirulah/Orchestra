@@ -9,8 +9,12 @@ import { RECONNECT_CODES } from './reconnect.ts';
 import type { ReconnectCodes } from './reconnect.ts';
 import { ACCOUNTS_FILTERS, ACCOUNTS_SORTS } from './accountview.ts';
 import type { AccountsFilter, AccountsSort } from './accountview.ts';
+import { HOSTS_SORTS, cleanFolderList } from './hostview.ts';
+import type { HostsSort } from './hostview.ts';
 import { DEFAULT_ITEMS, DEFAULT_INTERVAL, DEFAULT_RM_INTERVAL, INTERVAL_LIMITS, RM_INTERVAL_LIMITS, cleanInterval, cleanItems, cleanRmInterval } from './statusbar.ts';
 import type { ItemId } from './statusbar.ts';
+import { cleanSoundId } from './sounds.ts';
+import type { SoundId } from './sounds.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
 export const APP_VERSION = '0.2.0';
@@ -58,10 +62,20 @@ export interface Settings {
   scanIntervalSec: number;
   notifyPermission: boolean;
   notifyDone: boolean;
+  /** Sonido cuando un agente necesita al usuario (pasa a 'waiting'). Independiente del aviso en pantalla; 'none' lo apaga. */
+  soundAttention: SoundId;
+  /** Sonido cuando un agente termina (busy → idle). Independiente del aviso en pantalla. */
+  soundDone: SoundId;
+  /** Volumen de los sonidos (0..100). */
+  soundVolume: number;
   /** Al reabrir Orchestra, cada panel de Claude retoma su conversación (`claude --resume <id>`) en vez de empezar una nueva. */
   restoreClaudeSessions: boolean;
   /** Minutos de caché por debajo de los cuales se marca «a punto de enfriarse». */
   cacheWarnMin: number;
+  /** Ficha flotante al dejar el ratón sobre un agente de la barra lateral. */
+  agentCard: boolean;
+  /** Retardo (ms) antes de abrir la ficha. */
+  agentCardDelayMs: number;
   /** Añade un envoltorio de statusline a los Claude lanzados desde Orchestra para leer los límites de uso (5 h / 7 d). */
   captureUsage: boolean;
   /** Aviso al cruzar el 80 % y el 95 % de la ventana de 5 h de una cuenta. */
@@ -134,6 +148,13 @@ export interface Settings {
   accountsSort: AccountsSort;
   /** Separar por proveedor, con encabezados cuando hay varios. */
   accountsGroup: boolean;
+  // --- Hosts SSH: vista de la barra lateral (ver hostview.ts) ---
+  /** Orden de los hosts: el guardado arrastrando ('manual') o por nombre ('name', carpetas también A-Z). */
+  hostsSort: HostsSort;
+  /** Orden de las carpetas (las que falten van detrás, A-Z). También guarda las carpetas vacías creadas a mano. */
+  hostFolders: string[];
+  /** Carpetas plegadas en la barra. */
+  hostFoldersCollapsed: string[];
   // --- Interna (no aparece en el diálogo) ---
   sidebarWidth: number;
   sidebarOpen: boolean;
@@ -165,8 +186,13 @@ export const DEFAULTS: Settings = {
   scanIntervalSec: 2,
   notifyPermission: true,
   notifyDone: true,
+  soundAttention: 'chime',
+  soundDone: 'bell',
+  soundVolume: 60,
   restoreClaudeSessions: true,
   cacheWarnMin: 5,
+  agentCard: true,
+  agentCardDelayMs: 600,
   captureUsage: true,
   notifyQuota: true,
   usageQuery: false,
@@ -201,6 +227,9 @@ export const DEFAULTS: Settings = {
   accountsFilter: 'all',
   accountsSort: 'manual',
   accountsGroup: true,
+  hostsSort: 'manual',
+  hostFolders: [],
+  hostFoldersCollapsed: [],
   sidebarWidth: 290,
   sidebarOpen: true,
 };
@@ -221,7 +250,9 @@ export const LIMITS = {
   fontSize: [9, 24],
   lineHeight: [1.0, 1.6],
   scanIntervalSec: [1, 10],
+  soundVolume: [0, 100],
   cacheWarnMin: [1, 30],
+  agentCardDelayMs: [300, 2000],
   usageQueryMin: [2, 30],
   sshReconnectMaxAttempts: [0, 50],
   sshReconnectFirstDelaySec: [1, 60],
@@ -247,7 +278,7 @@ export const LIMITS = {
 export const SECTION_KEYS = {
   general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval'],
   terminal: ['fontFamily', 'fontSize', 'lineHeight', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
-  agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'restoreClaudeSessions', 'cacheWarnMin', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
+  agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
     'sshHostKeyPolicy',
@@ -319,8 +350,13 @@ export function clampSettings(raw: unknown): Settings {
     scanIntervalSec: num(r.scanIntervalSec, LIMITS.scanIntervalSec, D.scanIntervalSec),
     notifyPermission: bool(r.notifyPermission, D.notifyPermission),
     notifyDone: bool(r.notifyDone, D.notifyDone),
+    soundAttention: cleanSoundId(r.soundAttention, D.soundAttention),
+    soundDone: cleanSoundId(r.soundDone, D.soundDone),
+    soundVolume: num(r.soundVolume, LIMITS.soundVolume, D.soundVolume),
     restoreClaudeSessions: bool(r.restoreClaudeSessions, D.restoreClaudeSessions),
     cacheWarnMin: num(r.cacheWarnMin, LIMITS.cacheWarnMin, D.cacheWarnMin),
+    agentCard: bool(r.agentCard, D.agentCard),
+    agentCardDelayMs: num(r.agentCardDelayMs, LIMITS.agentCardDelayMs, D.agentCardDelayMs),
     captureUsage: bool(r.captureUsage, D.captureUsage),
     notifyQuota: bool(r.notifyQuota, D.notifyQuota),
     usageQuery: bool(r.usageQuery, D.usageQuery),
@@ -355,6 +391,9 @@ export function clampSettings(raw: unknown): Settings {
     accountsFilter: oneOf(r.accountsFilter, ACCOUNTS_FILTERS, D.accountsFilter),
     accountsSort: oneOf(r.accountsSort, ACCOUNTS_SORTS, D.accountsSort),
     accountsGroup: bool(r.accountsGroup, D.accountsGroup),
+    hostsSort: oneOf(r.hostsSort, HOSTS_SORTS, D.hostsSort),
+    hostFolders: cleanFolderList(r.hostFolders),
+    hostFoldersCollapsed: cleanFolderList(r.hostFoldersCollapsed),
     sidebarWidth: num(r.sidebarWidth, LIMITS.sidebarWidth, D.sidebarWidth),
     sidebarOpen: bool(r.sidebarOpen, D.sidebarOpen),
   };

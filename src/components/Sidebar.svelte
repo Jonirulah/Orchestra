@@ -1,6 +1,8 @@
 <script lang="ts">
   import { app, type OpenReq } from '../lib/store.svelte.ts';
   import { slide, fly } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
+  import { tick } from 'svelte';
   import Icon from './Icon.svelte';
   import Logo from './Logo.svelte';
   import AgentTree from './AgentTree.svelte';
@@ -14,7 +16,9 @@
   import { t, tk } from '../lib/i18n.ts';
   import { ctxmenu } from '../lib/ctxmenu.svelte.ts';
   import { isMenuKey } from '../lib/ctxmenu.ts';
-  import { accountsViewMenu, sidebarMenu } from '../lib/ctxitems.ts';
+  import { accountsViewMenu, hostFolderMenu, hostMenu, hostsViewMenu, sidebarMenu } from '../lib/ctxitems.ts';
+  import { UNGROUPED, buildHostView, canStepHost, folderOf, folderOrder } from '../lib/hostview.ts';
+  import type { Host } from '../lib/model.ts';
   import { accountMenuFor } from '../lib/ctxaccount.ts';
 
   let quick = $state('');
@@ -34,10 +38,15 @@
   const q = $derived(app.filter.trim().toLowerCase());
   const match = (...s: (string | undefined)[]) => !q || s.some((x) => x?.toLowerCase().includes(q));
 
-  const hosts = $derived(app.hosts.filter((h) => match(h.name, h.host, h.user, h.group, ...h.tags)));
-  const groups = $derived(
-    [...new Set(hosts.map((h) => h.group || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b))),
-  );
+  // Hosts por carpetas, con el orden elegido (hostview.ts, puro). Con texto en el filtro solo salen las carpetas con resultados.
+  const hostView = $derived(buildHostView(app.hosts, {
+    sort: app.settings.hostsSort, folders: app.settings.hostFolders, collapsed: app.settings.hostFoldersCollapsed, text: q,
+  }));
+  const anyHost = $derived(hostView.some((f) => f.hosts.length || f.name));
+  /** Carpetas con nombre en el orden en que se ven (para Subir/Bajar y para soltar carpetas). */
+  const shownFolders = $derived(hostView.filter((f) => f.name).map((f) => f.name));
+  /** «Sin carpeta» lleva cabecera solo si hay carpetas con nombre (si no, la lista es plana como antes). */
+  const hasNamed = $derived(shownFolders.length > 0);
   const cfgHosts = $derived(app.sshConfig.filter((h) => match(h.alias, h.hostname, h.user)));
   // Vista de las cuentas: filtro por proveedor + agrupar + orden (accountview.ts, puro). `app.accounts` no se toca.
   const counts = $derived(providerCounts(app.accounts));
@@ -76,13 +85,145 @@
   }
   const toggle = (k: string) => (collapsed[k] = !collapsed[k]);
 
-  // Menú de la sección SSH (importar / exportar)
-  let sshMenu = $state(false);
+  // Menú de la sección SSH: orden, nueva carpeta, importar / exportar
   const importable = $derived(
     app.sshConfig.filter((c) => !app.hosts.some((h) => h.name.toLowerCase() === c.alias.toLowerCase())).length,
   );
-  function doImport() { sshMenu = false; app.importSshConfig(); }
-  function doExport() { sshMenu = false; void app.exportHosts(); }
+  function doImport() { app.importSshConfig(); }
+  function doExport() { void app.exportHosts(); }
+  function openSshMenu(ev: MouseEvent) {
+    ctxmenu.openBelow(ev.currentTarget as HTMLElement, hostsViewMenu({
+      sort: app.settings.hostsSort, importable, hostCount: app.hosts.length,
+      setSort: (v) => app.setting('hostsSort', v),
+      newFolder: () => startFolderRename(app.newHostFolder()),
+      importHosts: doImport, exportHosts: doExport,
+    }));
+  }
+
+  // ---------- hosts: carpetas, arrastrar y teclado ----------
+  /** Con texto en el filtro no se reordena (la lista está recortada): arrastrar solo abre en la rejilla. */
+  const reorderable = $derived(!q);
+  type Drag = { kind: 'host'; id: string } | { kind: 'folder'; name: string };
+  /** Dónde caerá: `mark` = fila o cabecera que pinta la raya; `after` = raya debajo (si no, encima). */
+  type Drop = { kind: 'host'; folder: string; beforeId: string | null; mark: string; after: boolean }
+    | { kind: 'folder'; before: string | null; mark: string; after: boolean };
+  let drag = $state<Drag | null>(null);
+  let drop = $state<Drop | null>(null);
+  const lowerHalf = (ev: DragEvent) => { const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); return ev.clientY > r.top + r.height / 2; };
+
+  function hostDragStart(ev: DragEvent, h: Host) {
+    dragStart(ev, { kind: 'host', id: h.id }); // sigue sirviendo para abrirlo en la rejilla
+    if (!reorderable || !ev.dataTransfer) return;
+    ev.dataTransfer.setData('application/x-orchestra-host', h.id);
+    ev.dataTransfer.effectAllowed = 'copyMove';
+    drag = { kind: 'host', id: h.id };
+  }
+  function folderDragStart(ev: DragEvent, name: string) {
+    if (!reorderable || !ev.dataTransfer) { ev.preventDefault(); return; }
+    ev.dataTransfer.setData('application/x-orchestra-folder', name);
+    ev.dataTransfer.effectAllowed = 'move';
+    drag = { kind: 'folder', name };
+  }
+  function dragEnd() { drag = null; drop = null; }
+  const accept = (ev: DragEvent) => { ev.preventDefault(); if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move'; };
+
+  /** Una carpeta arrastrada cae antes de `before` (null = al final); la raya se pinta encima de esa cabecera (o al final). */
+  function folderDropBefore(before: string | null) {
+    drop = { kind: 'folder', before, mark: before !== null ? `f:${before}` : hostView.some((f) => !f.name) ? 'f:' : 'f:end', after: false };
+  }
+  const nextFolder = (name: string): string | null => shownFolders[shownFolders.indexOf(name) + 1] ?? null;
+  /** Sobre un host: el arrastrado cae antes (mitad de arriba) o después (mitad de abajo). Una carpeta sobre el cuerpo de otra cae detrás de esta. */
+  function overHost(ev: DragEvent, folder: string, list: Host[], i: number) {
+    if (drag?.kind === 'folder') { accept(ev); folderDropBefore(folder ? nextFolder(folder) : null); return; }
+    if (drag?.kind !== 'host') return;
+    accept(ev);
+    const after = lowerHalf(ev);
+    drop = { kind: 'host', folder, beforeId: after ? (list[i + 1]?.id ?? null) : list[i].id, mark: list[i].id, after };
+  }
+  /** Sobre la cabecera de una carpeta: un host cae al final de esa carpeta; una carpeta, antes o después de esta. */
+  function overFolder(ev: DragEvent, name: string) {
+    if (!drag) return;
+    accept(ev);
+    if (drag.kind === 'host') { drop = { kind: 'host', folder: name, beforeId: null, mark: `f:${name}`, after: false }; return; }
+    if (name === UNGROUPED) { folderDropBefore(null); return; }
+    folderDropBefore(lowerHalf(ev) ? nextFolder(name) : name);
+  }
+  function doDrop(ev: DragEvent) {
+    const d = drag, to = drop;
+    dragEnd();
+    if (!d || !to) return;
+    ev.preventDefault();
+    if (d.kind === 'host' && to.kind === 'host') app.moveHostTo(d.id, to.folder, to.beforeId);
+    else if (d.kind === 'folder' && to.kind === 'folder') app.moveHostFolder(d.name, to.before);
+  }
+  /** Al salir de la lista no se marca ningún sitio. */
+  function leaveList(ev: DragEvent) {
+    const to = ev.relatedTarget as Node | null;
+    if (!to || !(ev.currentTarget as HTMLElement).contains(to)) drop = null;
+  }
+  const markOf = (key: string) => (drop && drop.mark === key ? (drop.after ? 'after' : 'before') : '');
+
+  async function refocus(sel: string) { await tick(); (document.querySelector(sel) as HTMLElement | null)?.focus(); }
+  const hostSel = (id: string) => `[data-host="${CSS.escape(id)}"]`;
+  const folderSel = (name: string) => `[data-folder="${CSS.escape(name)}"]`;
+  function stepHost(h: Host, dir: -1 | 1) { app.stepHost(h.id, dir); void refocus(hostSel(h.id)); }
+  function stepFolder(name: string, dir: -1 | 1) { app.stepHostFolder(name, dir); void refocus(folderSel(name)); }
+  /** Con A-Z, Subir/Bajar primero congela ese orden (siempre hay algo que hacer); con Manual, solo si no está en el extremo. */
+  const canStep = (h: Host, dir: -1 | 1) => app.settings.hostsSort !== 'manual' || canStepHost(app.hosts, app.settings.hostFolders, h.id, dir);
+  const editHost = (h: Host) => (app.hostDialog = { ...h, tags: [...h.tags] });
+
+  function hostMenuFor(h: Host) {
+    return hostMenu({
+      folder: folderOf(h), folders: folderOrder(app.hosts, app.settings.hostFolders),
+      canUp: reorderable && canStep(h, -1), canDown: reorderable && canStep(h, 1),
+      connect: () => app.open({ kind: 'host', id: h.id }),
+      edit: () => editHost(h),
+      up: () => stepHost(h, -1), down: () => stepHost(h, 1),
+      moveTo: (f) => app.moveHostTo(h.id, f, null),
+      moveToNew: () => { const f = app.newHostFolder(); app.moveHostTo(h.id, f, null); startFolderRename(f); },
+      remove: () => app.deleteHost(h.id),
+    });
+  }
+  function hostCtx(ev: MouseEvent, h: Host) { ctxmenu.openFromEvent(ev, hostMenuFor(h), ev.currentTarget as HTMLElement); }
+  function hostKey(ev: KeyboardEvent, h: Host) {
+    if (ev.altKey && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+      ev.preventDefault();
+      if (reorderable) stepHost(h, ev.key === 'ArrowUp' ? -1 : 1);
+    } else if (isMenuKey(ev)) { ev.preventDefault(); ctxmenu.openBelow(ev.currentTarget as HTMLElement, hostMenuFor(h)); }
+  }
+
+  function folderMenuFor(name: string, collapsedNow: boolean) {
+    const i = shownFolders.indexOf(name);
+    const manual = app.settings.hostsSort === 'manual';
+    return hostFolderMenu({
+      collapsed: collapsedNow,
+      canUp: reorderable && (!manual || i > 0), canDown: reorderable && (!manual || i < shownFolders.length - 1),
+      toggle: () => app.toggleHostFolder(name),
+      rename: () => startFolderRename(name),
+      up: () => stepFolder(name, -1), down: () => stepFolder(name, 1),
+      newFolder: () => startFolderRename(app.newHostFolder()),
+      remove: () => app.deleteHostFolder(name),
+    });
+  }
+  function folderCtx(ev: MouseEvent, name: string, c: boolean) { ctxmenu.openFromEvent(ev, folderMenuFor(name, c), ev.currentTarget as HTMLElement); }
+  function folderKey(ev: KeyboardEvent, name: string, c: boolean) {
+    if (ev.altKey && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+      ev.preventDefault();
+      if (reorderable) stepFolder(name, ev.key === 'ArrowUp' ? -1 : 1);
+    } else if (ev.key === 'F2') { ev.preventDefault(); startFolderRename(name); }
+    else if (isMenuKey(ev)) { ev.preventDefault(); ctxmenu.openBelow(ev.currentTarget as HTMLElement, folderMenuFor(name, c)); }
+  }
+  // Renombrar una carpeta en el sitio (como las cuentas: Enter guarda, Esc cancela).
+  let renamingFolder = $state<string | null>(null);
+  let folderRenameCancelled = false;
+  function startFolderRename(name: string) { folderRenameCancelled = false; renamingFolder = name; }
+  function finishFolderRename(name: string, ev: Event) {
+    if (renamingFolder !== name) return;
+    const v = (ev.currentTarget as HTMLInputElement).value;
+    renamingFolder = null;
+    if (!folderRenameCancelled) app.renameHostFolder(name, v);
+    void refocus(folderSel(folderRenameCancelled ? name : v.trim() || name));
+  }
 
   // ---------- menú contextual ----------
   let renaming = $state<string | null>(null);
@@ -108,7 +249,7 @@
   }
   /** Clic derecho en un hueco de la barra (no sobre una fila, un botón ni un campo). */
   function sideCtx(ev: MouseEvent) {
-    if ((ev.target as Element).closest?.('button, input, a, .item-wrap, .sshmenu')) return;
+    if ((ev.target as Element).closest?.('button, input, a, .item-wrap')) return;
     ctxmenu.openFromEvent(ev, sidebarMenu({
       addAccount: () => (app.accountDialog = true),
       newHost: () => app.newHost(),
@@ -210,36 +351,69 @@
     <div class="sec">
       <button class="sec-h" onclick={() => toggle('ssh')}><span class="chev" class:closed={collapsed.ssh}><Icon name="down" size={12} /></span> SSH</button>
       <span class="sshbtns">
-        <button class="iconbtn" title={t('sidebar.ssh.menuTitle')} aria-haspopup="menu" aria-expanded={sshMenu} onclick={() => (sshMenu = !sshMenu)}><Icon name="layers" /></button>
+        <button class="iconbtn" class:viewon={app.settings.hostsSort !== 'manual'} title={t('sidebar.ssh.menuTitle')} aria-label={t('sidebar.ssh.menuTitle')} aria-haspopup="menu" onclick={openSshMenu}><Icon name="sort" /></button>
         <button class="iconbtn" title={t('sidebar.ssh.newTitle')} onclick={() => app.newHost()}><Icon name="plus" /></button>
       </span>
     </div>
-    {#if sshMenu}
-      <div class="sshmenu" role="menu">
-        <button role="menuitem" class="mi" disabled={!importable} onclick={doImport}>
-          {importable ? t('sidebar.ssh.importAllCount', { n: importable }) : t('sidebar.ssh.importAll')}
-        </button>
-        <button role="menuitem" class="mi" disabled={!app.hosts.length} onclick={doExport}>{t('sidebar.ssh.export')}</button>
-      </div>
-    {/if}
     {#if !collapsed.ssh}
-     <div class="collapse" transition:slide={{ duration: dur(180) }}>
-      {#each groups as g (g)}
-        {#if g}<div class="grp">{g}</div>{/if}
-        {#each hosts.filter((h) => (h.group || '') === g) as h (h.id)}
-          <div class="item-wrap" in:fly={{ x: -10, duration: dur(150) }}>
-            <button class="item" draggable="true" ondragstart={(e) => dragStart(e, { kind: 'host', id: h.id })}
-              onclick={() => app.open({ kind: 'host', id: h.id })}>
+     <!-- svelte-ignore a11y_no_static_element_interactions -->
+     <div class="collapse hostlist" class:dragging={!!drag} transition:slide={{ duration: dur(180) }} ondragleave={leaveList} ondrop={doDrop}>
+      {#each hostView as f (f.name)}
+        {#if f.name}
+          {#if renamingFolder === f.name}
+          <div class="fold renaming">
+            <span class="chev" class:closed={f.collapsed}><Icon name="down" size={11} /></span>
+            <input class="rn" value={f.name} aria-label={t('sidebar.ssh.folder.renameAria')} spellcheck="false" use:focusSelect
+              onblur={(e) => finishFolderRename(f.name, e)} onkeydown={(e) => { if (e.key === 'Escape') folderRenameCancelled = true; renameKey(e); }} />
+          </div>
+          {:else}
+          <button class="fold" data-folder={f.name} draggable={reorderable} title={t('sidebar.ssh.folder.title')} aria-expanded={!f.collapsed}
+            class:drop-before={drag?.kind === 'folder' && drop?.mark === `f:${f.name}`}
+            class:drop-into={drag?.kind === 'host' && drop?.mark === `f:${f.name}`} class:lifted={drag?.kind === 'folder' && drag.name === f.name}
+            onclick={() => app.toggleHostFolder(f.name)} oncontextmenu={(e) => folderCtx(e, f.name, f.collapsed)} onkeydown={(e) => folderKey(e, f.name, f.collapsed)}
+            ondragstart={(e) => folderDragStart(e, f.name)} ondragend={dragEnd} ondragover={(e) => overFolder(e, f.name)}>
+            <span class="chev" class:closed={f.collapsed}><Icon name="down" size={11} /></span>
+            <span class="fname">{f.name}</span>
+            <span class="fcount" title={t('sidebar.ssh.folderCount', { n: f.total })}>{q && f.hosts.length !== f.total ? `${f.hosts.length}/${f.total}` : f.total}</span>
+          </button>
+          {/if}
+        {:else if hasNamed}
+          <!-- «Sin carpeta»: cabecera fija (no se pliega ni se mueve); sirve para soltar hosts y para mandar una carpeta al final -->
+          <div class="fold none" class:drop-into={drag?.kind === 'host' && drop?.mark === 'f:'} class:drop-before={drag?.kind === 'folder' && drop?.mark === 'f:'}
+            ondragover={(e) => overFolder(e, UNGROUPED)}>
+            <span class="fname">{t('sidebar.ssh.folder.none')}</span><span class="fcount">{f.total}</span>
+          </div>
+        {/if}
+        {#if !f.collapsed}
+        <div class="foldbody" class:indent={!!f.name} class:lifted={drag?.kind === 'folder' && drag.name === f.name} transition:slide={{ duration: dur(150) }}>
+        {#each f.hosts as h, i (h.id)}
+          <div class="item-wrap" animate:flip={{ duration: dur(160) }} in:fly={{ x: -10, duration: dur(150) }}
+            class:drop-before={markOf(h.id) === 'before'} class:drop-after={markOf(h.id) === 'after'}
+            ondragover={(e) => overHost(e, f.name, f.hosts, i)}>
+            <button class="item" data-host={h.id} draggable="true" class:lifted={drag?.kind === 'host' && drag.id === h.id}
+              ondragstart={(e) => hostDragStart(e, h)} ondragend={dragEnd}
+              oncontextmenu={(e) => hostCtx(e, h)} onkeydown={(e) => hostKey(e, h)}
+              onclick={() => app.open({ kind: 'host', id: h.id })} title={t('sidebar.ssh.hostTitle')}>
               <span class="dot sq" style:background={h.color || 'var(--info)'}></span>
               <span class="txt">
                 <span class="name">{h.name || h.host}</span>
                 <span class="sub">{h.user ? h.user + '@' : ''}{h.host}{h.port ? ':' + h.port : ''}{h.tmux ? ' · tmux' : ''}</span> <!-- i18n-ignore -->
               </span>
             </button>
-            <button class="iconbtn edit" title={t('sidebar.ssh.editTitle')} onclick={() => (app.hostDialog = { ...h, tags: [...h.tags] })}><Icon name="edit" size={13} /></button>
+            <button class="iconbtn edit" title={t('sidebar.ssh.editTitle')} onclick={() => editHost(h)}><Icon name="edit" size={13} /></button>
           </div>
         {/each}
+        </div>
+        {/if}
       {/each}
+      {#if drag?.kind === 'folder' && drop?.mark === 'f:end'}<div class="endmark"></div>{/if}
+      {#if drag?.kind === 'host' && hasNamed && !hostView.some((f) => !f.name)}
+        <!-- mientras se arrastra: sitio para sacar un host de su carpeta aunque «Sin carpeta» esté vacía -->
+        <div class="fold none" class:drop-into={drop?.mark === 'f:'} ondragover={(e) => overFolder(e, UNGROUPED)}>
+          <span class="fname">{t('sidebar.ssh.folder.none')}</span><span class="fcount">0</span>
+        </div>
+      {/if}
+      {#if cfgHosts.length && anyHost}<div class="fold none cfg">{t('sidebar.ssh.fromConfigHead')}</div>{/if}
       {#each cfgHosts as h (h.alias)}
         <button class="item" draggable="true" ondragstart={(e) => dragStart(e, { kind: 'sshconfig', alias: h.alias })}
           onclick={() => app.open({ kind: 'sshconfig', alias: h.alias })} title={t('sidebar.ssh.fromConfigTitle')}>
@@ -247,7 +421,7 @@
           <span class="txt"><span class="name">{h.alias}</span><span class="sub">{h.user ? h.user + '@' : ''}{h.hostname ?? ''} · ssh config</span></span>
         </button>
       {/each}
-      {#if !hosts.length && !cfgHosts.length}
+      {#if !anyHost && !cfgHosts.length}
         <div class="empty">{t('sidebar.ssh.empty')}</div>
       {/if}
      </div>
@@ -344,8 +518,26 @@
   .chip.on { color: var(--text); background: var(--accent-soft); border-color: var(--accent); }
   .chip .n { opacity: 0.65; font-variant-numeric: tabular-nums; }
   .chip:focus-visible, .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .sshmenu { display: grid; margin: 2px 10px 6px 12px; padding: 4px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--border-strong); }
-  .sshmenu .mi { text-align: left; padding: 5px 8px; border-radius: 5px; font-size: 12px; }
-  .sshmenu .mi:hover:not(:disabled) { background: var(--raise); }
-  .sshmenu .mi:disabled { opacity: 0.4; }
+  /* Carpetas de hosts: cabecera con chevron, nombre y contador; el cuerpo va un poco sangrado. */
+  .fold { position: relative; display: flex; align-items: center; gap: 5px; width: calc(100% - 12px); margin: 3px 6px 0; padding: 4px 8px 3px 6px; border-radius: 5px;
+    color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; text-align: left; transition: background 0.12s, color 0.12s; }
+  button.fold { cursor: pointer; }
+  button.fold:hover { color: var(--text); background: var(--raise); }
+  .fold:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .fold .chev { color: var(--faint); }
+  .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fcount { font-variant-numeric: tabular-nums; font-size: 10px; letter-spacing: 0; padding: 0 6px; border-radius: 999px; background: var(--raise); color: var(--muted); }
+  .fold.none { cursor: default; }
+  .fold.cfg { text-transform: none; letter-spacing: 0.02em; }
+  .fold.renaming { text-transform: none; letter-spacing: 0; }
+  .foldbody.indent { margin-left: 8px; }
+  /* Indicador de dónde caerá: raya de acento entre filas; la carpeta de destino se resalta entera. */
+  .item-wrap.drop-before::after, .item-wrap.drop-after::after, .fold.drop-before::after, .endmark {
+    content: ''; position: absolute; left: 10px; right: 10px; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); pointer-events: none; }
+  .item-wrap.drop-before::after, .fold.drop-before::after { top: -2px; }
+  .item-wrap.drop-after::after { bottom: -2px; }
+  .endmark { position: relative; display: block; margin: 2px 0; }
+  .fold.drop-into { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+  .lifted { opacity: 0.45; }
+  .hostlist.dragging .item:hover { transform: none; }
 </style>

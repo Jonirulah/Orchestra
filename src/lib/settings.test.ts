@@ -386,3 +386,13 @@ test('the text of every built-in theme is readable on its background (WCAG ≥ 4
     assert.ok(contrast(t.cursor, t.background) >= 2.5, `${id}: cursor ${contrast(t.cursor, t.background).toFixed(2)}`);
   }
 });
+
+test('ficha de agente: encendida por defecto y retardo acotado a 300-2000 ms', () => {
+  assert.equal(DEFAULTS.agentCard, true);
+  assert.equal(DEFAULTS.agentCardDelayMs, 600);
+  assert.equal(clampSettings({ agentCardDelayMs: 50 }).agentCardDelayMs, 300);
+  assert.equal(clampSettings({ agentCardDelayMs: 9999 }).agentCardDelayMs, 2000);
+  assert.equal(clampSettings({ agentCard: 'yes' }).agentCard, true);
+  assert.equal(clampSettings({ agentCard: false }).agentCard, false);
+  assert.ok(SECTION_KEYS.agents.includes('agentCard') && SECTION_KEYS.agents.includes('agentCardDelayMs'));
+});

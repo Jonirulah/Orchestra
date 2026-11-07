@@ -9,4 +9,6 @@ export default {
   'palette.settings': 'Ajustes…',
   'palette.toggleSidebar': 'Mostrar / ocultar barra lateral',
   'palette.signIn': 'Iniciar sesión · {name}',
+  'palette.openSaved': 'Abrir espacio «{name}»',
+  'palette.savedHint': 'guardado',
 } as const;
