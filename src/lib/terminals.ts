@@ -70,6 +70,7 @@ export interface TermOptions {
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
+  letterSpacing: number;
   cursorStyle: 'bar' | 'block' | 'underline';
   cursorBlink: boolean;
   scrollback: number;
@@ -102,7 +103,7 @@ export const termTheme: TermTheme = themeOf(DEFAULTS.theme);
 export const FONT_FAMILY = fontStack(DEFAULTS.fontFamily);
 
 let opts: TermOptions = {
-  fontFamily: FONT_FAMILY, fontSize: DEFAULTS.fontSize, lineHeight: DEFAULTS.lineHeight,
+  fontFamily: FONT_FAMILY, fontSize: DEFAULTS.fontSize, lineHeight: DEFAULTS.lineHeight, letterSpacing: DEFAULTS.letterSpacing,
   cursorStyle: DEFAULTS.cursorStyle, cursorBlink: DEFAULTS.cursorBlink, scrollback: DEFAULTS.scrollback,
   theme: termTheme, copyOnSelect: DEFAULTS.copyOnSelect, rightClick: DEFAULTS.rightClick, bell: DEFAULTS.bell,
 };
@@ -154,6 +155,7 @@ function create(id: string): Entry {
     fontFamily: opts.fontFamily,
     fontSize: opts.fontSize,
     lineHeight: opts.lineHeight,
+    letterSpacing: opts.letterSpacing,
     cursorBlink: opts.cursorBlink,
     cursorStyle: opts.cursorStyle,
     scrollback: opts.scrollback,
@@ -426,6 +428,7 @@ export function applyOptions(o: TermOptions): void {
     if (t.fontFamily !== o.fontFamily) t.fontFamily = o.fontFamily;
     if (t.fontSize !== o.fontSize) t.fontSize = o.fontSize;
     if (t.lineHeight !== o.lineHeight) t.lineHeight = o.lineHeight;
+    if (t.letterSpacing !== o.letterSpacing) t.letterSpacing = o.letterSpacing;
     if (t.cursorStyle !== o.cursorStyle) t.cursorStyle = o.cursorStyle;
     if (t.cursorBlink !== o.cursorBlink) t.cursorBlink = o.cursorBlink;
     if (t.scrollback !== o.scrollback) t.scrollback = o.scrollback;

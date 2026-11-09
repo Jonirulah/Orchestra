@@ -17,7 +17,7 @@ import { cleanSoundId } from './sounds.ts';
 import type { SoundId } from './sounds.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.4.1';
 
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
@@ -49,6 +49,8 @@ export interface Settings {
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
+  /** Píxeles de más (o de menos) entre letras; xterm los redondea a píxeles enteros. */
+  letterSpacing: number;
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
   scrollback: number;
@@ -189,6 +191,7 @@ export const DEFAULTS: Settings = {
   fontFamily: 'Cascadia Code',
   fontSize: 13,
   lineHeight: 1.12,
+  letterSpacing: 0,
   cursorStyle: 'bar',
   cursorBlink: true,
   scrollback: 5000,
@@ -269,6 +272,7 @@ export const POLICY_IDS: readonly AccountPolicy[] = ['manual', 'round-robin', 'r
 export const LIMITS = {
   fontSize: [9, 24],
   lineHeight: [1.0, 1.6],
+  letterSpacing: [-2, 8],
   scanIntervalSec: [1, 10],
   soundVolume: [0, 100],
   cacheWarnMin: [1, 30],
@@ -297,7 +301,7 @@ export const LIMITS = {
 /** Claves que reinicia «Reset section» en cada sección con ajustes. */
 export const SECTION_KEYS = {
   general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
-  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
+  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
   agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
@@ -358,6 +362,7 @@ export function clampSettings(raw: unknown): Settings {
     fontFamily: cleanFont(r.fontFamily, D.fontFamily),
     fontSize: num(r.fontSize, LIMITS.fontSize, D.fontSize),
     lineHeight: num(r.lineHeight, LIMITS.lineHeight, D.lineHeight, 2),
+    letterSpacing: num(r.letterSpacing, LIMITS.letterSpacing, D.letterSpacing),
     cursorStyle: oneOf(r.cursorStyle, CURSOR_STYLES, D.cursorStyle),
     cursorBlink: bool(r.cursorBlink, D.cursorBlink),
     scrollback: (SCROLLBACK_CHOICES as readonly unknown[]).includes(r.scrollback) ? (r.scrollback as number) : D.scrollback,

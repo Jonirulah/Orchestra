@@ -1,6 +1,6 @@
 [package]
 name = "orchestra"
-version = "0.4.0"
+version = "0.4.1"
 description = "Terminal, SSH and AI-agent manager for Windows"
 edition = "2021"
 default-run = "orchestra"
@@ -43,4 +43,4 @@ codegen-units = 4
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
 windows-core = "0.62"
-windows = { version = "0.62", features = ["Win32_System_Com"] }
+windows = { version = "0.62", features = ["Win32_System_Com", "Win32_Graphics_DirectWrite"] }

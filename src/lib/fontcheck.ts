@@ -4,14 +4,29 @@
 const SAMPLE = 'mmmmmmmmmmlliWWiiOO0@#{}[]';
 let ctx: CanvasRenderingContext2D | null | undefined;
 
-function width(font: string): number {
+function widthOf(font: string, text: string): number {
   if (ctx === undefined) ctx = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
   if (!ctx) return 0;
   ctx.font = font;
-  return ctx.measureText(SAMPLE).width;
+  return ctx.measureText(text).width;
 }
+const width = (font: string) => widthOf(font, SAMPLE);
 
 const cache = new Map<string, boolean>();
+const monoCache = new Map<string, boolean>();
+
+/** ¿Monoespaciada? Una «i» mide lo mismo que una «W» y que una «m». Mide la fuente de verdad, no lo que dice su ficha. */
+export function isMonospaced(name: string): boolean {
+  const key = name.toLowerCase();
+  const hit = monoCache.get(key);
+  if (hit !== undefined) return hit;
+  const f = `72px '${name.replace(/['"\\]/g, '')}', monospace`;
+  const [i, w, m] = ['iiiiiiiiii', 'WWWWWWWWWW', 'mmmmmmmmmm'].map((s) => widthOf(f, s));
+  // Sin canvas (ancho 0) no se puede saber: se da por buena.
+  const ok = i === 0 || (Math.abs(i - w) <= i * 0.01 && Math.abs(i - m) <= i * 0.01);
+  monoCache.set(key, ok);
+  return ok;
+}
 
 /** `true` si la fuente de ese nombre está instalada (o si no se puede medir: entonces no se marca nada como faltante). */
 export function isFontInstalled(name: string): boolean {

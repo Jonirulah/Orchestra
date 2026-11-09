@@ -5,24 +5,30 @@
   import type { ThemeDef } from '../lib/themes.ts';
   import { MAX_INPUT_BYTES, exportTheme, parseTheme, slugOf } from '../lib/themeimport.ts';
   import { t } from '../lib/i18n.ts';
-  import { copyText } from '../lib/backend.ts';
-  import { isFontInstalled } from '../lib/fontcheck.ts';
+  import { copyText, listFonts } from '../lib/backend.ts';
+  import { firstFamily, groupFonts, type InstalledFont } from '../lib/fontlist.ts';
+  import { isFontInstalled, isMonospaced } from '../lib/fontcheck.ts';
   import Seg from './Seg.svelte';
   import Toggle from './Toggle.svelte';
   import Slider from './Slider.svelte';
   import SettingsGit from './SettingsGit.svelte';
 
   const s = $derived(app.settings);
-  const isPreset = (f: string) => (FONT_PRESETS as readonly string[]).includes(f);
-  // Las instaladas arriba (cada una en su propia tipografía) y, aparte, las que habría que instalar antes.
-  const fontsInstalled = FONT_PRESETS.filter((f) => isFontInstalled(f));
-  const fontsMissing = FONT_PRESETS.filter((f) => !isFontInstalled(f));
-  const fontMissingNow = $derived(!!s.fontFamily && !isFontInstalled(s.fontFamily.split(',')[0].replace(/['"]/g, '').trim()));
+  // Todas las instaladas en el sistema (Rust) más las de siempre: monoespaciadas arriba, cada una en su tipografía; luego
+  // las demás instaladas, las instaladas con Orchestra abierto (hay que reiniciarlo) y las de siempre sin instalar.
+  let systemFonts = $state<InstalledFont[]>([]);
+  listFonts().then((f) => { systemFonts = f; }).catch(() => {});
+  const groups = $derived(groupFonts(systemFonts, FONT_PRESETS, isFontInstalled, isMonospaced));
+  const listed = $derived(new Set([...groups.mono, ...groups.other].map((f) => f.toLowerCase())));
+  const currentFont = $derived(firstFamily(s.fontFamily));
+  const fontNeedsRestart = $derived(groups.restart.some((f) => f.toLowerCase() === currentFont.toLowerCase()));
+  const fontMissingNow = $derived(!!s.fontFamily && !fontNeedsRestart && !isFontInstalled(currentFont));
 
-  // La opción «Custom…» se queda elegida aunque el texto coincida con una fuente de la lista.
-  let custom = $state(!isPreset(app.settings.fontFamily));
+  // «Custom…» sale si la fuente no está en la lista; una vez elegida (o escribiendo en ella) se queda aunque el texto
+  // coincida con una fuente de la lista.
+  let custom = $state(false);
   let customText = $state(app.settings.fontFamily);
-  const fontChoice = $derived(custom || !isPreset(s.fontFamily) ? 'custom' : s.fontFamily);
+  const fontChoice = $derived(custom || !listed.has(s.fontFamily.toLowerCase()) ? 'custom' : s.fontFamily);
   const entries = $derived(allThemes(app.customThemes));
   const builtin = $derived(entries.filter((e) => !e.custom));
   const customEntries = $derived(entries.filter((e) => e.custom));
@@ -146,6 +152,7 @@
     app.setting('fontFamily', v);
   }
   function typeFont() {
+    custom = true;
     if (customText.trim()) app.setting('fontFamily', customText);
   }
 </script>
@@ -155,11 +162,21 @@
   <div class="ctl col">
     <select value={fontChoice} onchange={(e) => pickFont(e.currentTarget.value)}>
       <optgroup label={t('settings.terminal.fontInstalled')}>
-        {#each fontsInstalled as f (f)}<option value={f} style:font-family="'{f}', monospace">{f}</option>{/each}
+        {#each groups.mono as f (f)}<option value={f} style:font-family="'{f}', monospace">{f}</option>{/each}
       </optgroup>
-      {#if fontsMissing.length}
+      {#if groups.other.length}
+        <optgroup label={t('settings.terminal.fontOther')}>
+          {#each groups.other as f (f)}<option value={f} style:font-family="'{f}', monospace">{f}</option>{/each}
+        </optgroup>
+      {/if}
+      {#if groups.restart.length}
+        <optgroup label={t('settings.terminal.fontNew')}>
+          {#each groups.restart as f (f)}<option value={f} disabled>{f}</option>{/each}
+        </optgroup>
+      {/if}
+      {#if groups.missing.length}
         <optgroup label={t('settings.terminal.fontMissing')}>
-          {#each fontsMissing as f (f)}<option value={f}>{f}</option>{/each}
+          {#each groups.missing as f (f)}<option value={f}>{f}</option>{/each}
         </optgroup>
       {/if}
       <option value="custom">{t('settings.terminal.fontCustom')}</option>
@@ -168,6 +185,7 @@
       <input placeholder={t('settings.terminal.fontPlaceholder')} bind:value={customText} oninput={typeFont} spellcheck="false" />
     {/if}
     {#if fontMissingNow}<small class="s-warnline">{t('settings.terminal.fontNotInstalled')}</small>{/if}
+    {#if groups.restart.length}<small class="s-warnline">{t('settings.terminal.fontNewHint', { names: groups.restart.join(', ') })}</small>{/if}
   </div>
 </div>
 
@@ -179,6 +197,11 @@
 <div class="s-row">
   <div class="lbl"><b>{t('settings.terminal.lineHeightLabel')}</b></div>
   <div class="ctl"><Slider value={s.lineHeight} min={LIMITS.lineHeight[0]} max={LIMITS.lineHeight[1]} step={0.02} digits={2} onchange={(v) => app.setting('lineHeight', v)} /></div>
+</div>
+
+<div class="s-row">
+  <div class="lbl"><b>{t('settings.terminal.letterSpacingLabel')}</b><small>{t('settings.terminal.letterSpacingHint')}</small></div>
+  <div class="ctl"><Slider value={s.letterSpacing} min={LIMITS.letterSpacing[0]} max={LIMITS.letterSpacing[1]} unit=" px" onchange={(v) => app.setting('letterSpacing', v)} /></div>
 </div>
 
 <div class="s-row">

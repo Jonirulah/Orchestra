@@ -2,6 +2,7 @@ import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { UsageResult } from './usageQuery.ts';
 import { demoHistory, type HistPoint } from './history.ts';
+import type { InstalledFont } from './fontlist.ts';
 import { demoAccounts, demoMcpBase, demoMcpDef, demoQuery, DEMO_CODEX_DEFAULT } from './demodata.ts';
 import { demoScanReport, demoSessionReport, demoAdvice, demoReport } from './consumodemo.ts';
 
@@ -124,6 +125,11 @@ export async function detectShells(): Promise<ShellProfile[]> {
     { id: 'cmd', name: 'Command Prompt', program: 'cmd.exe', args: [] },
     { id: 'gitbash', name: 'Git Bash', program: 'bash.exe', args: [] }];
   return invoke('detect_shells');
+}
+/** Fuentes instaladas en el sistema (DirectWrite). En la demo, unas cuantas para ver los grupos de la lista. */
+export async function listFonts(): Promise<InstalledFont[]> {
+  if (!inTauri) return [{ name: 'Consolas', newSinceStart: false }, { name: 'Arial', newSinceStart: false }, { name: 'Fuente Nueva Demo', newSinceStart: true }];
+  return invoke('list_fonts');
 }
 export async function sshConfigHosts(): Promise<SshConfigHost[]> {
   if (!inTauri) return [{ alias: 'prod-web', hostname: '10.0.0.5', user: 'deploy' }];

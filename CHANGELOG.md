@@ -5,6 +5,17 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-10
+
+### Added
+- **Letter spacing** for the terminal (Settings → Terminal), from -2 to +8 px.
+
+### Fixed
+- **Installed fonts missing from the font list**: it only offered a fixed set of 22 fonts, so any other font you installed
+  (Asterisk Mono, for example) never showed up. It now lists every installed font, monospaced ones first (measured, not taken
+  from the font's own flag, which is often wrong), then the rest. A font installed while Orchestra is open is shown apart with a
+  note: Windows only hands new fonts to Orchestra when it starts, so quit it from the tray and open it again.
+
 ## [0.4.0] - 2026-11-07
 
 ### Added

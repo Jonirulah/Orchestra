@@ -27,6 +27,17 @@ test('out-of-range numbers are clamped, invalid ones fall back', () => {
   assert.equal(clampSettings({ lineHeight: 1.23456 }).lineHeight, 1.23);
 });
 
+test('letter spacing: whole pixels within its range, 0 by default (old settings without it keep the font as is)', () => {
+  assert.equal(DEFAULTS.letterSpacing, 0);
+  assert.equal(clampSettings({ fontSize: 14 }).letterSpacing, 0);
+  assert.equal(clampSettings({ letterSpacing: 3 }).letterSpacing, 3);
+  assert.equal(clampSettings({ letterSpacing: -1 }).letterSpacing, -1);
+  assert.equal(clampSettings({ letterSpacing: 1.6 }).letterSpacing, 2);
+  assert.equal(clampSettings({ letterSpacing: 99 }).letterSpacing, 8);
+  assert.equal(clampSettings({ letterSpacing: -99 }).letterSpacing, -2);
+  assert.equal(clampSettings({ letterSpacing: '2' }).letterSpacing, 0);
+});
+
 test('invalid enums, colors and types fall back to defaults', () => {
   const s = clampSettings({
     cursorStyle: 'star', rightClick: 7, bell: null, theme: 'nope', accountPolicy: 'chaos',

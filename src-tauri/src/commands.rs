@@ -109,6 +109,14 @@ pub async fn detect_shells() -> Vec<shells::ShellProfile> {
         .unwrap_or_default()
 }
 
+/// Fuentes instaladas (para la lista de Ajustes → Terminal).
+#[tauri::command]
+pub async fn list_fonts() -> Vec<crate::fonts::FontFamily> {
+    tauri::async_runtime::spawn_blocking(crate::fonts::list)
+        .await
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn ssh_config_hosts() -> Vec<sshcfg::SshHost> {
     let Some(home) = home() else {

@@ -5,6 +5,7 @@ mod agents;
 mod clipimg;
 mod commands;
 mod consumo;
+mod fonts;
 mod git;
 mod history;
 mod hostkey;
@@ -95,6 +96,7 @@ fn main() {
             commands::pty_close,
             commands::pty_list,
             commands::detect_shells,
+            commands::list_fonts,
             commands::ssh_config_hosts,
             commands::home_dir,
             commands::open_url,
@@ -189,6 +191,7 @@ fn main() {
             remote_metrics::spawn_reaper(&rm);
             app.manage(rm);
             app.manage(portfwd::Manager::new(std::sync::Arc::new(portfwd::SshSpawner), Default::default()));
+            fonts::snapshot_at_start();
             clipimg::cleanup_on_start(app.handle());
             clipimg::install_drop_bridge(app.handle());
             let menu = tray_menu(app.handle(), TRAY_SHOW, TRAY_QUIT)?;

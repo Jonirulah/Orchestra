@@ -1346,7 +1346,7 @@ class AppState {
   termOptions(): T.TermOptions {
     const s = this.settings;
     return {
-      fontFamily: fontStack(s.fontFamily), fontSize: s.fontSize, lineHeight: s.lineHeight,
+      fontFamily: fontStack(s.fontFamily), fontSize: s.fontSize, lineHeight: s.lineHeight, letterSpacing: s.letterSpacing,
       cursorStyle: s.cursorStyle, cursorBlink: s.cursorBlink, scrollback: s.scrollback,
       theme: resolveTheme(s.theme, this.customThemes), copyOnSelect: s.copyOnSelect, rightClick: s.rightClick, bell: s.bell,
     };
