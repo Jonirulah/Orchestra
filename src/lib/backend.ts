@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { UsageResult } from './usageQuery.ts';
 import { demoHistory, type HistPoint } from './history.ts';
 import type { InstalledFont } from './fontlist.ts';
+import type { ClaudeThemeFile } from './claudetheme.ts';
 import { demoAccounts, demoMcpBase, demoMcpDef, demoQuery, DEMO_CODEX_DEFAULT } from './demodata.ts';
 import { demoScanReport, demoSessionReport, demoAdvice, demoReport } from './consumodemo.ts';
 
@@ -125,6 +126,12 @@ export async function detectShells(): Promise<ShellProfile[]> {
     { id: 'cmd', name: 'Command Prompt', program: 'cmd.exe', args: [] },
     { id: 'gitbash', name: 'Git Bash', program: 'bash.exe', args: [] }];
   return invoke('detect_shells');
+}
+export interface ClaudeThemesResult { dir: string; ok: boolean; written: number; removed: number; error: string | null }
+/** Escribe los temas de Claude en `<cuenta>/themes/orchestra-*.json` de cada cuenta. */
+export async function claudeThemesWrite(dirs: string[], files: ClaudeThemeFile[]): Promise<ClaudeThemesResult[]> {
+  if (!inTauri) return dirs.map((dir) => ({ dir, ok: true, written: files.length, removed: 0, error: null }));
+  return invoke('claude_themes_write', { dirs, files });
 }
 /** Fuentes instaladas en el sistema (DirectWrite). En la demo, unas cuantas para ver los grupos de la lista. */
 export async function listFonts(): Promise<InstalledFont[]> {

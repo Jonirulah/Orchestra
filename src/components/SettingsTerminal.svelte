@@ -4,7 +4,7 @@
   import { ANSI_KEYS, DEFAULT_THEME, MAX_CUSTOM_THEMES, allThemes, hasTheme, resolveTheme } from '../lib/themes.ts';
   import type { ThemeDef } from '../lib/themes.ts';
   import { MAX_INPUT_BYTES, exportTheme, parseTheme, slugOf } from '../lib/themeimport.ts';
-  import { t } from '../lib/i18n.ts';
+  import { t, tn } from '../lib/i18n.ts';
   import { copyText, listFonts } from '../lib/backend.ts';
   import { firstFamily, groupFonts, type InstalledFont } from '../lib/fontlist.ts';
   import { isFontInstalled, isMonospaced } from '../lib/fontcheck.ts';
@@ -286,6 +286,23 @@
           {/if}
         </div>
       {/if}
+    </div>
+  </div>
+
+  <div class="s-row">
+    <div class="lbl">
+      <b>{t('settings.terminal.claudeThemesLabel')}</b><small>{t('settings.terminal.claudeThemesHint')}</small>
+      {#if app.claudeThemesStatus}
+        {#if app.claudeThemesStatus.failed.length}
+          <small class="s-warnline">{t('settings.terminal.claudeThemesFailed', { list: app.claudeThemesStatus.failed.join(' · ') })}</small>
+        {:else}
+          <small>{tn('settings.terminal.claudeThemesDone', app.claudeThemesStatus.ok)}</small>
+        {/if}
+      {/if}
+    </div>
+    <div class="ctl">
+      <label class="inline"><Toggle value={s.claudeThemes} label={t('settings.terminal.claudeThemesAuto')} onchange={(v) => app.setting('claudeThemes', v)} /> {t('settings.terminal.claudeThemesAuto')}</label>
+      <button class="btn" disabled={!app.claudeAccounts.length} onclick={() => app.syncClaudeThemes(true)}>{t('settings.terminal.claudeThemesNow')}</button>
     </div>
   </div>
 

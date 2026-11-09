@@ -2,6 +2,7 @@
 
 mod accounts;
 mod agents;
+mod claude_themes;
 mod clipimg;
 mod commands;
 mod consumo;
@@ -97,6 +98,7 @@ fn main() {
             commands::pty_list,
             commands::detect_shells,
             commands::list_fonts,
+            commands::claude_themes_write,
             commands::ssh_config_hosts,
             commands::home_dir,
             commands::open_url,

@@ -1,6 +1,6 @@
 [package]
 name = "orchestra"
-version = "0.4.1"
+version = "0.4.2"
 description = "Terminal, SSH and AI-agent manager for Windows"
 edition = "2021"
 default-run = "orchestra"

@@ -109,6 +109,17 @@ pub async fn detect_shells() -> Vec<shells::ShellProfile> {
         .unwrap_or_default()
 }
 
+/// Escribe los temas de Claude que genera Orchestra en la carpeta `themes` de cada cuenta.
+#[tauri::command]
+pub async fn claude_themes_write(
+    dirs: Vec<String>,
+    files: Vec<crate::claude_themes::ThemeFile>,
+) -> Result<Vec<crate::claude_themes::DirResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::claude_themes::write_all(dirs, files))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Fuentes instaladas (para la lista de Ajustes → Terminal).
 #[tauri::command]
 pub async fn list_fonts() -> Vec<crate::fonts::FontFamily> {

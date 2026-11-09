@@ -5,6 +5,17 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-10
+
+### Added
+- **Themes for Claude Code** (Settings → Terminal): Orchestra writes a Claude Code theme for every terminal theme (built-in and
+  your own) into each Claude account, plus *Orchestra · Terminal theme*, which is rewritten whenever you change the terminal
+  theme. Pick one in Claude with `/theme` (new sessions). Each theme keeps what every Claude color is for (text, inline code and
+  permission prompts, Claude's orange, borders, diffs, your message background…) and takes it from the theme's palette, readable
+  on its background. Turn on *Keep them installed and up to date* to keep them in sync and add them to new accounts, or use
+  *Install now*. Only `orchestra-*.json` files in each account's `themes` folder are written. Headings, bold and italic have no
+  color of their own in Claude Code: they use the text color.
+
 ## [0.4.1] - 2026-11-10
 
 ### Added

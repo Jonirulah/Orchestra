@@ -31,6 +31,7 @@ import type { ThemeDef } from './themes.ts';
 import { sanitizeCustomThemes, sanitizeName, withUniqueIds } from './themeimport.ts';
 import { getLocale, resolveLanguage, setLocale, t } from './i18n.ts';
 import { cleanDismissed } from './consumo.ts';
+import { claudeThemeFiles } from './claudetheme.ts';
 import { SshConn } from './sshconn.ts';
 import type { ConnState } from './sshconn.ts';
 import { dotOf, separatorText, sshLook, veiled, worstDot } from './sshdrop.ts';
@@ -443,6 +444,38 @@ class AppState {
     clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => this.persistNow(), 400);
     this.syncMcp();
+    this.syncClaudeThemes();
+  }
+
+  /** Último resultado de instalar los temas de Claude (para Ajustes). */
+  claudeThemesStatus = $state<{ ok: number; failed: string[]; at: number } | null>(null);
+  private claudeThemesTimer = 0;
+  private claudeThemesLast = '';
+
+  /**
+   * Temas de Claude Code en las cuentas de Claude (ajuste `claudeThemes`, o `force` con «Instalar ahora»): uno por tema del
+   * terminal y «Orchestra · Tema del terminal», que se reescribe al cambiar de tema. Se llama en cada `persist()`: solo
+   * escribe si cambian las cuentas, el tema, los temas propios o el idioma.
+   */
+  syncClaudeThemes(force = false): void {
+    if (!force && !this.settings.claudeThemes) return;
+    window.clearTimeout(this.claudeThemesTimer);
+    this.claudeThemesTimer = window.setTimeout(() => {
+      const dirs = this.claudeAccounts.map((a) => a.dir);
+      if (!dirs.length) return;
+      const files = claudeThemeFiles($state.snapshot(this.customThemes) as ThemeDef[], this.settings.theme, t('settings.terminal.claudeThemesFollowName'));
+      const sig = JSON.stringify({ dirs, files });
+      if (!force && sig === this.claudeThemesLast) return;
+      this.claudeThemesLast = sig;
+      be.claudeThemesWrite(dirs, files).then((r) => {
+        const failed = r.filter((x) => !x.ok).map((x) => `${x.dir}: ${x.error ?? '?'}`);
+        this.claudeThemesStatus = { ok: r.length - failed.length, failed, at: Date.now() };
+        if (failed.length) this.claudeThemesLast = '';
+      }).catch((e) => {
+        this.claudeThemesLast = '';
+        this.claudeThemesStatus = { ok: 0, failed: [String(e)], at: Date.now() };
+      });
+    }, force ? 0 : 500);
   }
 
   persistNow(): void {
