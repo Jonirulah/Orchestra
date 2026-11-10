@@ -52,7 +52,8 @@ export function hex([r, g, b]: RGB): string {
   return '#' + [r, g, b].map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('');
 }
 
-const mix = (a: RGB, b: RGB, t: number): RGB => [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * t) as RGB;
+/** Mezcla lineal de dos colores (t = 0 → a, 1 → b). */
+export const mix = (a: RGB, b: RGB, t: number): RGB => [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * t) as RGB;
 
 function lin(v: number): number {
   const c = v / 255;

@@ -299,11 +299,28 @@
           <small>{tn('settings.terminal.claudeThemesDone', app.claudeThemesStatus.ok)}</small>
         {/if}
       {/if}
+      {#if s.claudeThemes && s.claudeThemeSet}<small>{t('settings.terminal.claudeThemeSetHint')}</small>{/if}
+      {#if app.claudeThemeSetStatus}
+        {#if app.claudeThemeSetStatus.failed.length}
+          <small class="s-warnline">{t('settings.terminal.claudeThemesFailed', { list: app.claudeThemeSetStatus.failed.join(' · ') })}</small>
+        {/if}
+        {#if s.claudeThemes && s.claudeThemeSet && app.claudeThemeSetStatus.set}<small>{tn('settings.terminal.claudeThemeSetDone', app.claudeThemeSetStatus.set)}</small>{/if}
+        {#if s.claudeThemes && s.claudeThemeSet && app.claudeThemeSetStatus.manual}<small>{tn('settings.terminal.claudeThemeSetManual', app.claudeThemeSetStatus.manual)}</small>{/if}
+        {#if app.claudeThemeSetStatus.restored}<small>{tn('settings.terminal.claudeThemeSetRestored', app.claudeThemeSetStatus.restored)}</small>{/if}
+      {/if}
     </div>
     <div class="ctl">
       <label class="inline"><Toggle value={s.claudeThemes} label={t('settings.terminal.claudeThemesAuto')} onchange={(v) => app.setting('claudeThemes', v)} /> {t('settings.terminal.claudeThemesAuto')}</label>
+      {#if s.claudeThemes}
+        <label class="inline"><Toggle value={s.claudeThemeSet} label={t('settings.terminal.claudeThemeSetLabel')} onchange={(v) => app.setting('claudeThemeSet', v)} /> {t('settings.terminal.claudeThemeSetLabel')}</label>
+      {/if}
       <button class="btn" disabled={!app.claudeAccounts.length} onclick={() => app.syncClaudeThemes(true)}>{t('settings.terminal.claudeThemesNow')}</button>
     </div>
+  </div>
+
+  <div class="s-row">
+    <div class="lbl"><b>{t('settings.terminal.mdColorLabel')}</b><small>{t('settings.terminal.mdColorHint')}</small></div>
+    <div class="ctl"><Toggle value={s.claudeMarkdownColor} label={t('settings.terminal.mdColorLabel')} onchange={(v) => app.setting('claudeMarkdownColor', v)} /></div>
   </div>
 
   <div class="s-row stack">

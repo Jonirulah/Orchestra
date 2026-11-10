@@ -5,6 +5,21 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-11
+
+### Added
+- **Color in Claude's markdown** (Settings → Terminal, on by default): Claude Code only gives its markdown a style (# titles are
+  bold + italic + underlined, other titles and **bold** are bold, *italic* is italic) in the plain text color. In Claude panes,
+  Orchestra now paints them on the way to the terminal with colors from the terminal theme's palette: one for # titles, one
+  for bold, one for italic, each readable on the background (≥ 4.5:1) and told apart from the text, and they change with the
+  theme. Only text without a color of its own is painted: inline code, errors, diffs and everything else Claude colors stays
+  as it is. Codex, opencode, shells and SSH are never touched. Affects new output.
+- **Use the terminal theme in Claude** (Settings → Terminal, under *Themes for Claude Code*): Orchestra sets
+  `"theme": "custom:orchestra-terminal"` in each Claude account's `settings.json`, so there is no need to pick it with
+  `/theme`. It only replaces one of Claude's built-in themes or an Orchestra one, never a theme you chose yourself (also if you
+  change it later with `/theme`); the rest of the file is left exactly as it was. Turning it off puts the previous theme back.
+  New accounts get it when they sync. Claude reads the theme when a session starts: open sessions keep theirs until restarted.
+
 ## [0.4.2] - 2026-11-10
 
 ### Added

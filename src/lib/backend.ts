@@ -76,8 +76,25 @@ function demoSshAttach(id: string, dropSec: number): void {
   ok();
 }
 
+// Demo con salida REAL de Claude Code: `?claude=claude-2.1.322-dark` reproduce esa captura de docs/dev-notes/fixtures_claude/
+// (solo con el servidor de Vite) en los paneles de Claude, a trozos, hasta antes de salir. Sirve para ver el color del markdown.
+const demoClaude = new Set<string>();
+function demoClaudeReplay(id: string, name: string): void {
+  if (!/^[a-z0-9.-]+$/.test(name)) return;
+  void fetch(`/docs/dev-notes/fixtures_claude/${name}.bin`).then((r) => r.arrayBuffer()).then((buf) => {
+    let text = new TextDecoder().decode(buf);
+    // Hasta el último fotograma antes de «Press Ctrl-C again to exit» (la captura termina con dos Ctrl+C).
+    const end = text.indexOf('Press Ctrl-C');
+    if (end > 0) text = text.slice(0, text.lastIndexOf('(B', end));
+    const b = enc.encode(text);
+    let i = 0;
+    const step = () => { if (i >= b.length) return; demo.get(id)?.(b.slice(i, i + 997)); i += 997; setTimeout(step, 0); };
+    step();
+  }).catch(() => demoOut(id, `demo: no ${name}
+`));
+}
 export async function ptySpawn(spec: SpawnSpec): Promise<number> {
-  if (!inTauri) { if (spec.cwd) demoCwd.set(spec.id, spec.cwd); if (spec.program === 'ssh') demoSsh.add(spec.id); return 0; }
+  if (!inTauri) { if (spec.cwd) demoCwd.set(spec.id, spec.cwd); if (spec.program === 'ssh') demoSsh.add(spec.id); if ((spec.args ?? []).join(' ').includes('& claude')) demoClaude.add(spec.id); return 0; }
   return invoke<number>('pty_spawn', { spec });
 }
 
@@ -85,6 +102,7 @@ export async function ptyAttach(id: string, onData: (b: Uint8Array) => void): Pr
   if (!inTauri) {
     demo.set(id, onData);
     if (demoSsh.has(id) && demoDrop() > 0) { demoSshAttach(id, demoDrop()); return null; }
+    if (demoClaude.has(id) && demoParam('claude')) { demoClaudeReplay(id, demoParam('claude')!); return null; }
     // `?slow=3000` en la URL de la demo retrasa la primera salida: sirve para ver el aviso «conectando…» de los paneles SSH.
     const slow = Number(new URLSearchParams(location.search).get('slow')) || 0;
     // La demo también «avisa» de su carpeta (OSC 9;9) para ejercitar el manejador real de xterm (etiqueta de git).
@@ -132,6 +150,12 @@ export interface ClaudeThemesResult { dir: string; ok: boolean; written: number;
 export async function claudeThemesWrite(dirs: string[], files: ClaudeThemeFile[]): Promise<ClaudeThemesResult[]> {
   if (!inTauri) return dirs.map((dir) => ({ dir, ok: true, written: files.length, removed: 0, error: null }));
   return invoke('claude_themes_write', { dirs, files });
+}
+export interface ClaudeThemeSetResult { dir: string; ok: boolean; action: 'set' | 'kept' | 'manual' | 'restored' | 'none'; error: string | null }
+/** Pone (`on`) o devuelve (`!on`) el tema de Claude en `<cuenta>/settings.json` de cada cuenta (claude_theme_choice.rs). */
+export async function claudeThemeSet(dirs: string[], on: boolean, theme: string): Promise<ClaudeThemeSetResult[]> {
+  if (!inTauri) return dirs.map((dir) => ({ dir, ok: true, action: on ? 'set' : 'none', error: null }));
+  return invoke('claude_theme_set', { dirs, on, theme });
 }
 /** Fuentes instaladas en el sistema (DirectWrite). En la demo, unas cuantas para ver los grupos de la lista. */
 export async function listFonts(): Promise<InstalledFont[]> {

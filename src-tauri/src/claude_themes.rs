@@ -37,7 +37,7 @@ fn valid_slug(s: &str) -> bool {
 }
 
 /// Solo carpetas de cuentas de Claude (`.claude` o `.claude-*`), que ya existan.
-fn valid_dir(dir: &Path) -> bool {
+pub fn valid_dir(dir: &Path) -> bool {
     dir.is_absolute()
         && dir.is_dir()
         && dir.file_name().and_then(|n| n.to_str()).is_some_and(|n| n == ".claude" || n.starts_with(".claude-"))

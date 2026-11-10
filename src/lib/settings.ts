@@ -17,7 +17,7 @@ import { cleanSoundId } from './sounds.ts';
 import type { SoundId } from './sounds.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
-export const APP_VERSION = '0.4.2';
+export const APP_VERSION = '0.4.3';
 
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
@@ -53,6 +53,10 @@ export interface Settings {
   letterSpacing: number;
   /** Instalar los temas de Claude Code (uno por tema del terminal + el que lo sigue) en las cuentas de Claude. */
   claudeThemes: boolean;
+  /** Con `claudeThemes`: poner «Orchestra · Tema del terminal» en el settings.json de cada cuenta (sin /theme). */
+  claudeThemeSet: boolean;
+  /** Colorear títulos, negrita y cursiva del markdown de Claude en sus paneles con la paleta del tema (mdcolor.ts). */
+  claudeMarkdownColor: boolean;
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
   scrollback: number;
@@ -195,6 +199,8 @@ export const DEFAULTS: Settings = {
   lineHeight: 1.12,
   letterSpacing: 0,
   claudeThemes: false,
+  claudeThemeSet: false,
+  claudeMarkdownColor: true,
   cursorStyle: 'bar',
   cursorBlink: true,
   scrollback: 5000,
@@ -304,7 +310,7 @@ export const LIMITS = {
 /** Claves que reinicia «Reset section» en cada sección con ajustes. */
 export const SECTION_KEYS = {
   general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
-  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
+  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'claudeThemeSet', 'claudeMarkdownColor', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
   agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
@@ -367,6 +373,8 @@ export function clampSettings(raw: unknown): Settings {
     lineHeight: num(r.lineHeight, LIMITS.lineHeight, D.lineHeight, 2),
     letterSpacing: num(r.letterSpacing, LIMITS.letterSpacing, D.letterSpacing),
     claudeThemes: bool(r.claudeThemes, D.claudeThemes),
+    claudeThemeSet: bool(r.claudeThemeSet, D.claudeThemeSet),
+    claudeMarkdownColor: bool(r.claudeMarkdownColor, D.claudeMarkdownColor),
     cursorStyle: oneOf(r.cursorStyle, CURSOR_STYLES, D.cursorStyle),
     cursorBlink: bool(r.cursorBlink, D.cursorBlink),
     scrollback: (SCROLLBACK_CHOICES as readonly unknown[]).includes(r.scrollback) ? (r.scrollback as number) : D.scrollback,

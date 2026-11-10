@@ -14,6 +14,8 @@ import { themeOf } from './themes.ts';
 import type { TermTheme } from './themes.ts';
 import { parseOsc7, parseOsc9, withCwdTracking } from './gitinfo.ts';
 import { copiedCount, ctrlCAction, parseOsc52, rightClickAction, shouldHintShift } from './termcopy.ts';
+import { MdColorizer } from './mdcolor.ts';
+import type { MdPalette } from './mdcolor.ts';
 
 export interface TermHooks {
   /** La shell avisa de su carpeta (OSC 9;9 o OSC 7); ya validada. */
@@ -37,6 +39,8 @@ export interface TermHooks {
   onCopy?(id: string, r: CopyResult): void;
   /** La app del panel tiene el ratón y se arrastró sin Mayús (no hay selección): pista «mantén Mayús». */
   onShiftHint?(id: string): void;
+  /** Colores del markdown de Claude para la salida de ese panel, o null (no es de Claude o el ajuste está apagado). */
+  mdColors?(id: string): MdPalette | null;
 }
 
 export type CopyVia = 'key' | 'menu' | 'select' | 'osc52';
@@ -91,6 +95,8 @@ interface Entry {
   lastCols: number;
   lastRows: number;
   resizeTimer?: number;
+  /** Reescritor del markdown de Claude (se crea con la primera salida que lo necesita; ver mdcolor.ts). */
+  md?: MdColorizer;
 }
 
 const entries = new Map<string, Entry>();
@@ -333,7 +339,9 @@ async function attach(entry: Entry): Promise<void> {
   let seen = false;
   const code = await be.ptyAttach(entry.id, (b) => {
     if (!seen) { seen = true; hooks.onOutput(entry.id, true); }
-    entry.term.write(b);
+    const pal = hooks.mdColors?.(entry.id) ?? null;
+    if (pal && !entry.md) entry.md = new MdColorizer();
+    entry.term.write(entry.md ? entry.md.feed(b, pal) : b);
     outputTap?.(entry.id, b);
   });
   if (code !== null && code !== undefined) hooks.onState(entry.id, 'exited', code);
@@ -344,6 +352,7 @@ export async function restart(pane: Pane, banner?: string): Promise<void> {
   const e = entries.get(pane.id);
   if (!e) { ensure(pane); return launch(pane); }
   e.term.write(`\r\n\x1b[2m${banner ?? '── restarted ──'}\x1b[0m\r\n`);
+  e.md?.reset(); // proceso nuevo: estado SGR desde cero
   hooks.onOutput(pane.id, false);
   await be.ptySpawn({
     id: pane.id, program: pane.spec.program, args: spawnArgs(pane), cwd: pane.spec.cwd,

@@ -120,6 +120,18 @@ pub async fn claude_themes_write(
         .map_err(|e| e.to_string())?
 }
 
+/// Pone (`on`) o devuelve (`!on`) el tema de Claude en el `settings.json` de cada cuenta (ver claude_theme_choice.rs).
+#[tauri::command]
+pub async fn claude_theme_set(
+    dirs: Vec<String>,
+    on: bool,
+    theme: String,
+) -> Result<Vec<crate::claude_theme_choice::ChoiceResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::claude_theme_choice::set_all(dirs, on, theme))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Fuentes instaladas (para la lista de Ajustes → Terminal).
 #[tauri::command]
 pub async fn list_fonts() -> Vec<crate::fonts::FontFamily> {

@@ -2,6 +2,7 @@
 
 mod accounts;
 mod agents;
+mod claude_theme_choice;
 mod claude_themes;
 mod clipimg;
 mod commands;
@@ -99,6 +100,7 @@ fn main() {
             commands::detect_shells,
             commands::list_fonts,
             commands::claude_themes_write,
+            commands::claude_theme_set,
             commands::ssh_config_hosts,
             commands::home_dir,
             commands::open_url,

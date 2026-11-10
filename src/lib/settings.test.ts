@@ -407,3 +407,13 @@ test('ficha de agente: encendida por defecto y retardo acotado a 300-2000 ms', (
   assert.equal(clampSettings({ agentCard: false }).agentCard, false);
   assert.ok(SECTION_KEYS.agents.includes('agentCard') && SECTION_KEYS.agents.includes('agentCardDelayMs'));
 });
+
+test('Claude markdown color is on by default (also for old settings), setting the Claude theme is off; both reset with Terminal', () => {
+  assert.equal(DEFAULTS.claudeMarkdownColor, true);
+  assert.equal(DEFAULTS.claudeThemeSet, false);
+  assert.equal(clampSettings({ fontSize: 14 }).claudeMarkdownColor, true);
+  assert.equal(clampSettings({ claudeMarkdownColor: false }).claudeMarkdownColor, false);
+  assert.equal(clampSettings({ claudeMarkdownColor: 'no' }).claudeMarkdownColor, true);
+  assert.equal(clampSettings({ claudeThemeSet: true }).claudeThemeSet, true);
+  assert.ok(SECTION_KEYS.terminal.includes('claudeMarkdownColor') && SECTION_KEYS.terminal.includes('claudeThemeSet'));
+});

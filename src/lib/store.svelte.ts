@@ -31,7 +31,9 @@ import type { ThemeDef } from './themes.ts';
 import { sanitizeCustomThemes, sanitizeName, withUniqueIds } from './themeimport.ts';
 import { getLocale, resolveLanguage, setLocale, t } from './i18n.ts';
 import { cleanDismissed } from './consumo.ts';
-import { claudeThemeFiles } from './claudetheme.ts';
+import { FOLLOW_SLUG, claudeThemeFiles } from './claudetheme.ts';
+import { isClaudePane, mdPalette } from './mdcolor.ts';
+import type { MdPalette } from './mdcolor.ts';
 import { SshConn } from './sshconn.ts';
 import type { ConnState } from './sshconn.ts';
 import { dotOf, separatorText, sshLook, veiled, worstDot } from './sshdrop.ts';
@@ -179,6 +181,8 @@ class AppState {
   ignoredDirs = $state<string[]>([]);
   /** Temas de color importados por el usuario. Van aparte de `settings` para que «copiar ajustes» no los arrastre. */
   customThemes = $state<ThemeDef[]>([]);
+  /** Colores del markdown de Claude para el tema actual (cambian con el tema). */
+  private mdPal = $derived(mdPalette(resolveTheme(this.settings.theme, this.customThemes)));
   toastMsg = $state('');
   /** Auto-compact: últimos 20 compactados (solo en memoria). */
   compactLog = $state<CompactLogEntry[]>([]);
@@ -273,6 +277,7 @@ class AppState {
         onShiftHint: () => this.toast(t('terminals.copy.shiftHint')),
         onCwd: (id, cwd) => { if (this.live[id]?.cwd !== cwd) this.setLive(id, { cwd }); },
         trackFolder: () => this.settings.gitTrackFolder,
+        mdColors: (id) => this.mdColorsFor(id),
         onInput: (id, data) => this.drafts.set(id, nextDraft(this.drafts.get(id), data, Date.now())),
       },
       this.termOptions(),
@@ -445,6 +450,14 @@ class AppState {
     this.saveTimer = window.setTimeout(() => this.persistNow(), 400);
     this.syncMcp();
     this.syncClaudeThemes();
+    this.syncClaudeThemeOff();
+  }
+
+  /** Paleta del markdown para la salida de un panel: solo paneles de Claude y con el ajuste encendido (lo llama cada trozo). */
+  mdColorsFor(id: string): MdPalette | null {
+    if (!this.settings.claudeMarkdownColor) return null;
+    const p = this.paneById(id);
+    return p && isClaudePane(p, this.accounts) ? this.mdPal : null;
   }
 
   /** Último resultado de instalar los temas de Claude (para Ajustes). */
@@ -464,18 +477,52 @@ class AppState {
       const dirs = this.claudeAccounts.map((a) => a.dir);
       if (!dirs.length) return;
       const files = claudeThemeFiles($state.snapshot(this.customThemes) as ThemeDef[], this.settings.theme, t('settings.terminal.claudeThemesFollowName'));
-      const sig = JSON.stringify({ dirs, files });
+      // Con «usar el tema del terminal en Claude», también el settings.json de cada cuenta (después de escribir los temas).
+      const setTheme = this.settings.claudeThemes && this.settings.claudeThemeSet;
+      const sig = JSON.stringify({ dirs, files, setTheme });
       if (!force && sig === this.claudeThemesLast) return;
       this.claudeThemesLast = sig;
       be.claudeThemesWrite(dirs, files).then((r) => {
         const failed = r.filter((x) => !x.ok).map((x) => `${x.dir}: ${x.error ?? '?'}`);
         this.claudeThemesStatus = { ok: r.length - failed.length, failed, at: Date.now() };
         if (failed.length) this.claudeThemesLast = '';
+        const ok = r.filter((x) => x.ok).map((x) => x.dir);
+        if (setTheme && ok.length) this.runClaudeThemeSet(ok, true);
       }).catch((e) => {
         this.claudeThemesLast = '';
         this.claudeThemesStatus = { ok: 0, failed: [String(e)], at: Date.now() };
       });
     }, force ? 0 : 500);
+  }
+
+  /** Resultado de poner o devolver el tema en el settings.json de las cuentas (para Ajustes). */
+  claudeThemeSetStatus = $state<{ set: number; manual: number; restored: number; failed: string[] } | null>(null);
+  private claudeThemeOffLast = '';
+
+  private runClaudeThemeSet(dirs: string[], on: boolean): void {
+    be.claudeThemeSet(dirs, on, `custom:${FOLLOW_SLUG}`).then((r) => {
+      const n = (a: string) => r.filter((x) => x.ok && x.action === a).length;
+      const failed = r.filter((x) => !x.ok).map((x) => `${x.dir}: ${x.error ?? '?'}`);
+      this.claudeThemeSetStatus = { set: n('set') + n('kept'), manual: n('manual'), restored: n('restored'), failed };
+      if (failed.length) { if (on) this.claudeThemesLast = ''; else this.claudeThemeOffLast = ''; }
+    }).catch((e) => {
+      if (on) this.claudeThemesLast = ''; else this.claudeThemeOffLast = '';
+      this.claudeThemeSetStatus = { set: 0, manual: 0, restored: 0, failed: [String(e)] };
+    });
+  }
+
+  /**
+   * Opción apagada (o los temas de Claude apagados): devuelve a cada cuenta el tema que tenía antes, si sigue con el que
+   * puso Orchestra. Sin copia guardada en la cuenta no hace nada, así que llamarlo al arrancar es barato.
+   */
+  syncClaudeThemeOff(): void {
+    if (this.settings.claudeThemes && this.settings.claudeThemeSet) { this.claudeThemeOffLast = ''; return; }
+    const dirs = this.claudeAccounts.map((a) => a.dir);
+    const sig = JSON.stringify(dirs);
+    if (!dirs.length || sig === this.claudeThemeOffLast) return;
+    this.claudeThemeOffLast = sig;
+    this.claudeThemesLast = ''; // al volver a encenderla, se vuelve a aplicar aunque no cambie nada más
+    this.runClaudeThemeSet(dirs, false);
   }
 
   persistNow(): void {
