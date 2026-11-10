@@ -20,6 +20,12 @@ fn now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
 }
 
+/// Las 23:00 UTC de ayer, para las cuentas de prueba: con la hora real, justo después de medianoche «hoy» aún no tenía
+/// sesiones y estas pruebas fallaban según la hora (le pasó a la CI a las 00:00:08).
+fn test_clock() -> u64 {
+    now() / 86400 * 86400 - 3600
+}
+
 const TOL: f64 = 1e-9;
 
 fn le(a: f64, b: f64) -> bool {
@@ -292,7 +298,7 @@ fn run_account(tag: &str, acc: &Path, best: &Path, t: u64, d: &Path) -> Result<u
 #[test]
 fn invariantes_demo() {
     let d = tmp("demo");
-    let t = now();
+    let t = test_clock();
     let (acc, best) = cuenta_demo(&d, t, 8, 7);
     let n = run_account("demo", &acc, &best, t, &d).unwrap();
     assert!(n >= 20, "pocos consejos: {n}");
@@ -304,7 +310,7 @@ fn invariantes_demo() {
 #[test]
 fn invariantes_fixture_real() {
     let d = tmp("real");
-    let t = now();
+    let t = test_clock();
     let acc = d.join(".claude");
     let pdir = acc.join("projects").join("C--real-proyecto");
     let id = "11111111-2222-3333-4444-555555555555";

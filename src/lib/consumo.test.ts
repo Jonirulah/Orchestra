@@ -67,7 +67,10 @@ test('bloques más caros agrupados por origen, con % del TOTAL', () => {
 });
 
 test('coste por día apilado: Σ grupos = columna, mismo orden que la barra; hoy parcial', () => {
-  const now = Math.floor(Date.now() / 1000);
+  // Las 23:00 (hora local) de ayer: con la hora real, pasada la medianoche «hoy» aún no tenía datos y la prueba fallaba.
+  const ref = new Date();
+  ref.setHours(0, 0, 0, 0);
+  const now = Math.floor(ref.getTime() / 1000) - 3600;
   for (const days of [1, 7, 30] as const) {
     const g = globalModel(demoScanReport(days, now), days, now, 'eq');
     let any = 0;

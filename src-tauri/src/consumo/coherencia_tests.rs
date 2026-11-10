@@ -82,7 +82,9 @@ fn check_global(tag: &str, rep: &ScanReport, advice: &[consejos::Consejo]) -> us
 #[test]
 fn consejos_citan_su_tarjeta_hoy_7_dias_y_sesion() {
     let d = tmp("tarjetas");
-    let t = now();
+    // Las 23:00 UTC de ayer: con `now()`, justo después de medianoche «hoy» aún no tenía sesiones y la prueba fallaba
+    // según la hora (le pasó a la CI a las 00:00:08).
+    let t = now() / 86400 * 86400 - 3600;
     let (acc, best) = cuenta_demo(&d, t, 8, 7);
     let idx = d.join("index.json");
     let cancel = AtomicBool::new(false);
