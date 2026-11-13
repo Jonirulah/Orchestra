@@ -145,7 +145,7 @@ impl Session {
 /// Variables con las que Claude Code marca «esto corre dentro de otra sesión mía» (transcripción apagada, socket de
 /// mensajes, id de sesión…). Lista cerrada a propósito: el resto de `CLAUDE_*` / `CLAUDE_CODE_*` es configuración
 /// del usuario (Bedrock, límites de salida, carpeta de la cuenta…) y se respeta.
-fn is_session_marker(name: &str) -> bool {
+pub(crate) fn is_session_marker(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
         "CLAUDECODE"

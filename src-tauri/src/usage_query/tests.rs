@@ -42,7 +42,7 @@ fn acct_in(id: &str, dir: &Path) -> AccountIn {
 }
 
 fn env<'a>(base: &'a Path, url: &'a str) -> Env<'a> {
-    Env { base, url, connect: Duration::from_secs(2), total: Duration::from_secs(3), spacing: Duration::ZERO }
+    Env { base, url, connect: Duration::from_secs(2), total: Duration::from_secs(3), spacing: Duration::ZERO, force: false, renewer: None }
 }
 
 /// Lee todos los ficheros bajo `dir` (texto) para buscar el token.
@@ -579,7 +579,8 @@ fn slow_response_times_out() {
     let mut slow = reply(200, FIVE);
     slow.delay = Duration::from_secs(3);
     let srv = Fake::start(vec![slow]);
-    let e = Env { base: &base, url: &srv.url(), connect: Duration::from_millis(500), total: Duration::from_millis(400), spacing: Duration::ZERO };
+    let url = srv.url();
+    let e = Env { connect: Duration::from_millis(500), total: Duration::from_millis(400), ..env(&base, &url) };
     let t0 = std::time::Instant::now();
     let tr = Tracker::default();
     let (r, requested) = fetch_one(&e, &tr, &acct_in("s1", &acct), 5, NOW);
@@ -890,4 +891,121 @@ fn query_keeps_existing_limits_when_the_answer_has_none_and_replaces_them_when_i
     go(&srv.url(), &base, &a, &tr, NOW + 122.0);
     let q = crate::quota::read_dir(&base.join("quota"));
     assert_eq!(q[0].quota.limits, None);
+}
+
+// ---------- renovar con Claude Code y consulta forzada (botón de refrescar) ----------
+
+/// Renovador falso: cuenta las llamadas y, si `ok`, reescribe las credenciales FALSAS con 8 h de vida (como haría Claude Code).
+fn fake_renewer(calls: &std::cell::Cell<u32>, ok: bool) -> impl Fn(&str) -> bool + '_ {
+    move |dir: &str| {
+        calls.set(calls.get() + 1);
+        if ok {
+            std::fs::write(Path::new(dir).join(CREDS_FILE), creds_json(TOKEN, (NOW + 8.0 * 3600.0) * 1000.0)).unwrap();
+        }
+        ok
+    }
+}
+
+#[test]
+fn expired_token_is_renewed_by_claude_code_and_then_queried() {
+    let (base, acct) = fixture("renew-ok", -3600.0);
+    let srv = Fake::start(vec![reply(200, FIVE)]);
+    let calls = std::cell::Cell::new(0);
+    let r = fake_renewer(&calls, true);
+    let url = srv.url();
+    let e = Env { renewer: Some(&r), ..env(&base, &url) };
+    let (res, requested) = fetch_one(&e, &Tracker::default(), &acct_in("rn1", &acct), 5, NOW);
+    assert_clean(&res, &base);
+    assert_eq!(calls.get(), 1);
+    assert!(requested);
+    assert_eq!(res.status, Status::Ok);
+    assert_eq!(srv.count(), 1);
+}
+
+#[test]
+fn a_valid_token_never_calls_the_renewer() {
+    let (base, acct) = fixture("renew-valid", 7200.0);
+    let srv = Fake::start(vec![reply(200, FIVE)]);
+    let calls = std::cell::Cell::new(0);
+    let r = fake_renewer(&calls, true);
+    let url = srv.url();
+    let e = Env { renewer: Some(&r), ..env(&base, &url) };
+    assert_eq!(fetch_one(&e, &Tracker::default(), &acct_in("rn2", &acct), 5, NOW).0.status, Status::Ok);
+    assert_eq!(calls.get(), 0);
+}
+
+#[test]
+fn no_creds_or_bad_dirs_never_call_the_renewer() {
+    let srv = Fake::start(vec![reply(200, FIVE)]);
+    let calls = std::cell::Cell::new(0);
+    let r = fake_renewer(&calls, true);
+    let (base, acct) = fixture("renew-nocreds", 3600.0);
+    std::fs::remove_file(acct.join(CREDS_FILE)).unwrap();
+    let url = srv.url();
+    let e = Env { renewer: Some(&r), ..env(&base, &url) };
+    assert_eq!(fetch_one(&e, &Tracker::default(), &acct_in("rn3", &acct), 5, NOW).0.status, Status::Nocreds);
+    let bad = AccountIn { id: "rn4".into(), dir: acct.join("..").join("acct").to_string_lossy().into_owned() };
+    assert_eq!(fetch_one(&e, &Tracker::default(), &bad, 5, NOW).0.status, Status::Nocreds);
+    assert_eq!(calls.get(), 0);
+    assert_eq!(srv.count(), 0);
+}
+
+#[test]
+fn failed_renewal_sends_nothing_and_automatic_queries_wait_30_minutes() {
+    let (base, acct) = fixture("renew-fail", -3600.0);
+    let srv = Fake::start(vec![reply(200, FIVE)]);
+    let calls = std::cell::Cell::new(0);
+    let r = fake_renewer(&calls, false);
+    let tr = Tracker::default();
+    let a = acct_in("rn5", &acct);
+    let url = srv.url();
+    let auto = Env { renewer: Some(&r), ..env(&base, &url) };
+    let (res, requested) = fetch_one(&auto, &tr, &a, 5, NOW);
+    assert_eq!(res.status, Status::Expired);
+    assert!(res.message.as_deref().unwrap().contains("could not renew"));
+    assert!(!requested);
+    assert_eq!(calls.get(), 1);
+    // automática dentro de 30 min: no se vuelve a lanzar Claude
+    assert_eq!(fetch_one(&auto, &tr, &a, 5, NOW + 300.0).0.status, Status::Expired);
+    assert_eq!(calls.get(), 1);
+    // a mano (botón): sí
+    let manual = Env { force: true, ..auto };
+    assert_eq!(fetch_one(&manual, &tr, &a, 5, NOW + 301.0).0.status, Status::Expired);
+    assert_eq!(calls.get(), 2);
+    // pasados 30 min desde el último fallo, la automática vuelve a probar
+    let auto = Env { force: false, ..manual };
+    fetch_one(&auto, &tr, &a, 5, NOW + 301.0 + 1801.0);
+    assert_eq!(calls.get(), 3);
+    assert_eq!(srv.count(), 0, "con el token caducado no sale ninguna petición");
+}
+
+#[test]
+fn without_renewer_an_expired_token_keeps_the_plain_message() {
+    let (base, acct) = fixture("renew-none", -3600.0);
+    let srv = Fake::start(vec![reply(200, FIVE)]);
+    let r = go(&srv.url(), &base, &acct_in("rn6", &acct), &Tracker::default(), NOW);
+    assert_eq!(r.status, Status::Expired);
+    assert_eq!(r.message.as_deref(), Some("sign-in token expired"));
+}
+
+#[test]
+fn forced_query_has_a_10_second_floor_and_ignores_the_error_backoff() {
+    let (base, acct) = fixture("force", 360000.0);
+    let srv = Fake::start(vec![reply(429, "{}"), reply(200, FIVE)]);
+    let tr = Tracker::default();
+    let a = acct_in("fo1", &acct);
+    assert_eq!(go(&srv.url(), &base, &a, &tr, NOW).status, Status::RateLimited);
+    let url = srv.url();
+    let forced = Env { force: true, ..env(&base, &url) };
+    // dentro de 10 s, ni a mano
+    assert_eq!(fetch_one(&forced, &tr, &a, 5, NOW + 5.0).0.status, Status::RateLimited);
+    assert_eq!(srv.count(), 1);
+    // a los 11 s, a mano sí aunque la espera tras el 429 siga en marcha
+    let (r, requested) = fetch_one(&forced, &tr, &a, 5, NOW + 11.0);
+    assert!(requested);
+    assert_eq!(r.status, Status::Ok);
+    assert_eq!(srv.count(), 2);
+    // la automática sigue con su suelo de 60 s
+    go(&srv.url(), &base, &a, &tr, NOW + 30.0);
+    assert_eq!(srv.count(), 2);
 }

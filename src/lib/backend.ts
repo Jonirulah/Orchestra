@@ -353,10 +353,11 @@ export async function quotaRead(accts: { id: string; dir: string }[] = []): Prom
 /**
  * Consulta opcional de uso a Anthropic (ver docs/SECURITY.md). El backend lee el token de la carpeta de cada cuenta;
  * aquí solo viajan el id y la carpeta, y vuelven estados y porcentajes (nunca el token). Quien llama debe haberlo
- * pedido el usuario (ajuste `usageQuery` o el botón «Probar ahora»).
+ * pedido el usuario (ajuste `usageQuery`, el botón «Probar ahora» o el de refrescar).
+ * `force` = a mano (el backend baja su suelo de 60 s a 10 s); `renew` = si el token caducó, pedir a Claude Code que lo renueve.
  */
-export async function usageFetch(accts: { id: string; dir: string }[], intervalMin: number): Promise<UsageResult[]> {
-  if (inTauri) return invoke<UsageResult[]>('usage_fetch', { accounts: accts, intervalMin });
+export async function usageFetch(accts: { id: string; dir: string }[], intervalMin: number, opts: { force?: boolean; renew?: boolean } = {}): Promise<UsageResult[]> {
+  if (inTauri) return invoke<UsageResult[]>('usage_fetch', { accounts: accts, intervalMin, force: !!opts.force, renew: !!opts.renew });
   const now = Math.floor(Date.now() / 1000);
   return accts.map((a) => ({ accountId: a.id, status: 'ok' as const, fetchedAt: now, fiveHour: { used: 42, resetsAt: now + 3 * 3600 }, sevenDay: { used: 18, resetsAt: now + 3 * 86400 } }));
 }

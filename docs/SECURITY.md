@@ -184,6 +184,7 @@ What it does: one `GET https://api.anthropic.com/api/oauth/usage` per account, s
 `anthropic-beta: oauth-2025-04-20`, `User-Agent: Orchestra/<version>`. TLS certificates are validated (rustls). Timeouts: 5 s connect,
 10 s total. Redirects are never followed. The response is capped at 256 KB. Never more than one request per account per 60 s, even if
 the UI asks more often; after a 429, a 5xx or a network failure that account is skipped for twice the interval (growing, max 30 min).
+The refresh button in the sidebar (and *Test now*) is a manual request: for it the floor is 10 s and the wait after an error is skipped.
 Only `https://api.anthropic.com/api/oauth/usage` is a valid destination. The only override, for tests, is
 `ORCHESTRA_USAGE_URL`, and it is rejected unless it is plain `http://127.0.0.1:<port>/…` or `http://localhost:<port>/…`.
 
@@ -191,12 +192,18 @@ What it stores: the percentages and reset times of the 5 h and 7 d windows and u
 display name, active flag; texts capped at 40 characters), in `quota\<account>.json` next to what the status line wrapper writes.
 
 What it does **not** do:
-- It never renews tokens: no refresh call, no use of the refresh token. If `expiresAt` is within 60 s or past, **no request is sent**
-  and the account shows "Sign-in token expired; showing last data" until Claude Code itself refreshes the token (open Claude in that account).
+- Orchestra never renews tokens itself: no refresh call of its own, the refresh token is never read. If `expiresAt` is within 60 s or
+  past, **no request is sent with it**. Instead, if *Renew expired sign-ins* is on (default; the sidebar refresh button always does
+  it), Orchestra runs `claude auth status --json` with that account's folder (`CLAUDE_CONFIG_DIR`; none for `~/.claude`), hidden,
+  with a 20 s cap, and without the variables that mark a nested Claude session (`src-tauri/src/usage_renew.rs`). Claude Code then
+  renews its own token exactly as when you open Claude in that account. Orchestra does not read or keep that command's output; it
+  just reads `expiresAt` again. If it is still expired the account shows "Sign-in token expired; showing last data", and the
+  automatic query does not run `claude` for that account again for 30 minutes.
 - The token is never returned to the frontend, written to disk, logged or put in an error message. In Rust it lives in a wrapper type
   whose `Debug`/`Display` print `***`; the module has no print/log macros (a test reads the source to enforce it) and all error
   texts are fixed strings. The raw dump is the response body only (also with the token redacted if a server ever echoed it).
-- It writes nothing to Claude's folders and changes no Claude setting. It writes only `quota\<account>.json` and `.query-raw.txt` in
+- Orchestra itself writes nothing to Claude's folders and changes no Claude setting (when it renews, the one writing the new token
+  is Claude Code). It writes only `quota\<account>.json` and `.query-raw.txt` in
   Orchestra's data folder. Importing a settings JSON can never switch the query on.
 
 Risks you should weigh yourself:

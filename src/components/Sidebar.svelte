@@ -297,6 +297,11 @@
     <div class="sec">
       <button class="sec-h" onclick={() => toggle('ag')}><span class="chev" class:closed={collapsed.ag}><Icon name="down" size={12} /></span> {t('sidebar.accounts.title')}</button>
       <span class="sshbtns">
+        {#if app.claudeAccounts.length}
+          <button class="iconbtn" class:spin={app.usageRefreshing} disabled={app.usageRefreshing}
+            title={app.usageRefreshing ? t('sidebar.accounts.refreshing') : t('sidebar.accounts.refreshTitle')}
+            aria-label={t('sidebar.accounts.refreshTitle')} onclick={() => void app.refreshUsage()}><Icon name="refresh" /></button>
+        {/if}
         <button class="iconbtn" class:viewon={viewCustom} title={t('sidebar.accounts.viewTitle')} aria-label={t('sidebar.accounts.viewTitle')} aria-haspopup="menu" onclick={openViewMenu}><Icon name="sort" /></button>
         <button class="iconbtn" title={t('sidebar.accounts.addTitle')} onclick={() => (app.accountDialog = true)}><Icon name="plus" /></button>
       </span>
@@ -526,6 +531,10 @@
   .empty { color: var(--muted); font-size: 12px; padding: 6px 14px; }
   .sshbtns { display: inline-flex; gap: 2px; }
   .iconbtn.viewon { color: var(--accent); }
+  .iconbtn.spin :global(svg) { animation: orch-acc-spin 0.9s linear infinite; }
+  .iconbtn:disabled { cursor: default; }
+  @keyframes orch-acc-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .iconbtn.spin :global(svg) { animation: none; } }
   /* Chips de filtro por proveedor: pastillas pequeñas, mismo tamaño que .grp / .sub. */
   .chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 12px 5px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: 10.5px; line-height: 1.6; transition: background 0.14s, color 0.14s, border-color 0.14s; }

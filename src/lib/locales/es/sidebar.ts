@@ -27,6 +27,8 @@ export default {
   'sidebar.background.closeTitle': 'Cerrar este terminal',
   'sidebar.accounts.unchecked': 'sesión sin comprobar (Ajustes → Cuentas)',
   'sidebar.accounts.viewTitle': 'Ordenar, agrupar y filtrar cuentas',
+  'sidebar.accounts.refreshTitle': 'Refrescar ahora las cuentas y su uso (renueva con Claude Code las sesiones caducadas)',
+  'sidebar.accounts.refreshing': 'Refrescando…',
   'sidebar.accounts.filterAria': 'Mostrar cuentas de',
   'sidebar.accounts.chip.all': 'Todas',
   'sidebar.accounts.chip.claude': 'Claude',

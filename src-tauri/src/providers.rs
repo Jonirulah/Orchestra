@@ -213,8 +213,22 @@ pub(crate) fn run_capture(
     env: &[(String, String)],
     timeout: Duration,
 ) -> Option<(bool, String)> {
+    run_capture_env(program, args, env, &[], timeout)
+}
+
+/// Como `run_capture`, pero antes quita del entorno heredado las variables de `remove`.
+pub(crate) fn run_capture_env(
+    program: &str,
+    args: &[&str],
+    env: &[(String, String)],
+    remove: &[String],
+    timeout: Duration,
+) -> Option<(bool, String)> {
     let mut cmd = Command::new("cmd");
     cmd.arg("/C").arg(program).args(args);
+    for k in remove {
+        cmd.env_remove(k);
+    }
     for (k, v) in env {
         cmd.env(k, v);
     }

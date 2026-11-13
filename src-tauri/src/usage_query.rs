@@ -8,7 +8,9 @@
 //! - El token vive en un `Secret` cuyo `Debug`/`Display` imprimen `***`. Nunca se devuelve al
 //!   frontend, no se escribe en disco, no entra en mensajes de error y no hay ninguna
 //!   macro de impresión ni de registro en este fichero (lo vigila una prueba que lee el propio código fuente).
-//! - Nunca se renueva el token: si caduca en menos de 60 s, no se envía NADA (`expired`).
+//! - Orchestra nunca renueva el token por su cuenta ni lee el de refresco: si caduca en menos de 60 s no se envía NADA
+//!   (`expired`). Si la renovación está permitida (`Env::renewer`), se le pide a Claude Code que lo renueve él
+//!   (`usage_renew`: `claude auth status` con la carpeta de la cuenta) y se vuelve a leer el fichero.
 //! - Un único destino fijo, `https://api.anthropic.com/api/oauth/usage`, con validación de
 //!   certificado (rustls). Sin redirecciones. Solo se admite otro destino si es loopback
 //!   `http://127.0.0.1:<puerto>/…` o `http://localhost:<puerto>/…` (pruebas; variable
@@ -37,6 +39,10 @@ const MAX_RAW: usize = 4096;
 const MAX_CREDS: u64 = 64 * 1024;
 /// Como mucho una petición por cuenta cada 60 s, aunque el frontend pida más.
 const MIN_GAP_SEC: f64 = 60.0;
+/// Con el botón de refrescar (consulta forzada) el suelo baja a 10 s y se ignora la espera tras errores.
+const FORCE_GAP_SEC: f64 = 10.0;
+/// Tras una renovación fallida, las consultas automáticas no vuelven a intentarlo en 30 min (el botón sí).
+const RENEW_RETRY_SEC: f64 = 30.0 * 60.0;
 /// Si el token caduca antes de este margen no se envía nada.
 const EXPIRY_MARGIN_SEC: f64 = 60.0;
 const MAX_BACKOFF_SEC: f64 = 30.0 * 60.0;
@@ -193,7 +199,7 @@ fn read_token(dir: &str, now: f64) -> Result<Secret, (Status, &'static str)> {
         return Err(NO);
     }
     if now >= exp - EXPIRY_MARGIN_SEC {
-        return Err((Status::Expired, "sign-in token expired; Orchestra never renews tokens"));
+        return Err((Status::Expired, "sign-in token expired"));
     }
     Ok(token)
 }
@@ -502,6 +508,8 @@ struct AcctState {
     skip_until: f64,
     fails: u32,
     last: Option<UsageResult>,
+    /// Hasta cuándo no se reintenta sola una renovación que falló.
+    renew_retry_at: f64,
 }
 
 /// Estado en memoria de las consultas (suelo de 60 s y espera tras 429 / 5xx).
@@ -517,6 +525,11 @@ pub struct Env<'a> {
     pub total: Duration,
     /// Pausa entre cuentas (solo si la anterior hizo una petición).
     pub spacing: Duration,
+    /// Consulta pedida a mano (botón de refrescar): suelo de 10 s y sin espera tras errores.
+    pub force: bool,
+    /// Si el token caducó, cómo pedir a Claude Code que lo renueve (recibe la carpeta de la cuenta; `true` = terminó bien).
+    /// `None` = no se renueva.
+    pub renewer: Option<&'a dyn Fn(&str) -> bool>,
 }
 
 fn valid_id(id: &str) -> bool {
@@ -572,20 +585,25 @@ pub fn fetch_one(env: &Env, tracker: &Tracker, acct: &AccountIn, interval_min: u
     if !valid_id(id) {
         return (res("", Status::Error, now, Some("invalid account id")), false);
     }
-    // 1. Suelo de 60 s y espera: se devuelve lo último que se supo, sin tocar la red.
+    // 1. Suelo de 60 s (10 s si es a mano) y espera: se devuelve lo último que se supo, sin tocar la red.
     {
         let map = tracker.0.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(st) = map.get(id) {
-            if st.last_request > 0.0 && (now - st.last_request < MIN_GAP_SEC || now < st.skip_until) {
+            let gap = if env.force { FORCE_GAP_SEC } else { MIN_GAP_SEC };
+            if st.last_request > 0.0 && (now - st.last_request < gap || (!env.force && now < st.skip_until)) {
                 if let Some(last) = &st.last {
                     return (last.clone(), false);
                 }
             }
         }
     }
-    // 2. Credenciales: si no sirven, no se envía nada.
+    // 2. Credenciales: si no sirven, no se envía nada. Caducadas: se pide a Claude Code que las renueve (si se permite).
     let token = match read_token(&acct.dir, now) {
         Ok(t) => t,
+        Err((Status::Expired, msg)) => match renew(env, tracker, acct, now) {
+            Ok(t) => t,
+            Err(renew_msg) => return (res(id, Status::Expired, now, Some(renew_msg.unwrap_or(msg))), false),
+        },
         Err((status, msg)) => return (res(id, status, now, Some(msg)), false),
     };
     // 3. Una única petición.
@@ -646,6 +664,25 @@ pub fn fetch_one(env: &Env, tracker: &Tracker, acct: &AccountIn, interval_min: u
     (result, true)
 }
 
+/// Token caducado: pide a Claude Code que lo renueve y vuelve a leerlo. `Err(None)` = no se intentó (sin `renewer`);
+/// `Err(Some(texto))` = se intentó ahora (o hace menos de 30 min, en una consulta automática) y sigue caducado.
+fn renew(env: &Env, tracker: &Tracker, acct: &AccountIn, now: f64) -> Result<Secret, Option<&'static str>> {
+    const FAILED: &str = "Claude Code could not renew the sign-in; open Claude in that account";
+    let Some(renewer) = env.renewer else { return Err(None) };
+    let id = acct.id.as_str();
+    {
+        let map = tracker.0.lock().unwrap_or_else(|e| e.into_inner());
+        if !env.force && map.get(id).is_some_and(|st| now < st.renew_retry_at) {
+            return Err(Some(FAILED));
+        }
+    }
+    let token = if renewer(&acct.dir) { read_token(&acct.dir, now).ok() } else { None };
+    let mut map = tracker.0.lock().unwrap_or_else(|e| e.into_inner());
+    let st = map.entry(id.to_string()).or_default();
+    st.renew_retry_at = if token.is_some() { 0.0 } else { now + RENEW_RETRY_SEC };
+    token.ok_or(Some(FAILED))
+}
+
 /// Consulta varias cuentas, una tras otra.
 pub fn fetch_all(env: &Env, tracker: &Tracker, accounts: &[AccountIn], interval_min: u32, now: impl Fn() -> f64) -> Vec<UsageResult> {
     let mut out = Vec::new();
@@ -666,14 +703,31 @@ fn unix_now() -> f64 {
 }
 
 /// Pregunta a Anthropic por el uso de cada cuenta y lo guarda en `quota/<cuenta>.json`.
-/// Solo se llama desde la interfaz cuando el usuario lo ha activado (o pulsa «Probar ahora»).
+/// Solo se llama desde la interfaz cuando el usuario lo ha activado (o pulsa «Probar ahora» / refrescar).
+/// `force` = pedido a mano (suelo de 10 s, sin espera tras errores); `renew` = si el token caducó, pedir a Claude Code que lo renueve.
 #[tauri::command]
-pub async fn usage_fetch(app: tauri::AppHandle, accounts: Vec<AccountIn>, interval_min: Option<u32>) -> Result<Vec<UsageResult>, String> {
+pub async fn usage_fetch(
+    app: tauri::AppHandle,
+    accounts: Vec<AccountIn>,
+    interval_min: Option<u32>,
+    force: Option<bool>,
+    renew: Option<bool>,
+) -> Result<Vec<UsageResult>, String> {
     let base: PathBuf = crate::store::base_dir(&app)?;
     let url = resolve_url(std::env::var(URL_ENV).ok().as_deref()).map_err(str::to_string)?;
     let interval = interval_min.unwrap_or(5).clamp(2, 30);
+    let (force, renew) = (force.unwrap_or(false), renew.unwrap_or(false));
     tauri::async_runtime::spawn_blocking(move || {
-        let env = Env { base: &base, url: &url, connect: Duration::from_secs(5), total: Duration::from_secs(10), spacing: Duration::from_millis(400) };
+        let renewer: &dyn Fn(&str) -> bool = &crate::usage_renew::renew_with_claude;
+        let env = Env {
+            base: &base,
+            url: &url,
+            connect: Duration::from_secs(5),
+            total: Duration::from_secs(10),
+            spacing: Duration::from_millis(400),
+            force,
+            renewer: renew.then_some(renewer),
+        };
         fetch_all(&env, &TRACKER, &accounts, interval, unix_now)
     })
     .await

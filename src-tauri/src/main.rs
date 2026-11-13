@@ -30,6 +30,7 @@ mod subtranscript;
 mod tokens;
 mod updater;
 mod usage_query;
+mod usage_renew;
 mod vault;
 
 use std::sync::atomic::{AtomicBool, Ordering};

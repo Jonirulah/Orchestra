@@ -12,7 +12,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4.svg">
-  <img alt="Version 0.4.3" src="https://img.shields.io/badge/version-0.4.3-orange.svg">
+  <img alt="Version 0.4.4" src="https://img.shields.io/badge/version-0.4.4-orange.svg">
 </p>
 
 Orchestra puts your terminals in an adjustable grid on the right and, on the left, a sidebar with your Claude / Codex / opencode
@@ -129,8 +129,8 @@ Get the files from the [Releases](../../releases) page. Two options:
 
 | File | What it is |
 |---|---|
-| `Orchestra_0.4.3_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
-| `Orchestra_0.4.3_x64-portable.exe` | Portable executable (about 15 MB). Put it anywhere and run it. |
+| `Orchestra_0.4.4_x64-setup.exe` | NSIS installer, **per-user** (no administrator rights), English / Spanish. |
+| `Orchestra_0.4.4_x64-portable.exe` | Portable executable (about 15 MB). Put it anywhere and run it. |
 
 Notes:
 
@@ -255,7 +255,7 @@ Documentation index: [docs/README.md](docs/README.md).
 
 ## Status and known limitations
 
-Orchestra 0.4.3 (0.1.0 was the first public release) is a one-person project. New in 0.4.3: Claude's markdown titles, bold and italic painted with the terminal theme's colors in Claude panes, and an option to make each Claude account use the terminal theme; tested with unit tests on real Claude Code output and in the browser demo, not yet in the desktop window with live sessions. New in 0.4.2: Claude Code themes generated from the terminal themes, including one that follows the terminal theme. New in 0.4.1: letter spacing for the terminal, and the font list now shows every installed font (it only offered a fixed set before). New in 0.4.0: automatic updates, SFTP files drawer, port forwarding, image paste and reliable copy, visible SSH reconnection and the *Need attention* list, MCP view and Consumption view; covered by unit tests, fake servers, a local sshd and the browser demo, but SFTP, tunnels and image upload have not been used yet against a real server from the desktop window (see the [changelog](CHANGELOG.md)). New in 0.3.0: usage history chart, SSH host folders, saved workspaces, agent card and notification sounds, tested with unit tests and in the browser demo but not yet with live agents or a real SSH server in the desktop build. New in 0.2.0: the MCP `run_command` tool, which is covered by automated tests with a fake runner and real local processes but has **not** been run against a real SSH server by the author yet. What is verified and what is not:
+Orchestra 0.4.4 (0.1.0 was the first public release) is a one-person project. New in 0.4.4: a refresh button for accounts and usage, expired sign-ins renewed through Claude Code (`claude auth status`) so idle accounts keep fresh bars, and the Fable weekly bar always shown; tested with unit tests, fake servers and a real isolated run of the desktop build against real accounts. New in 0.4.3: Claude's markdown titles, bold and italic painted with the terminal theme's colors in Claude panes, and an option to make each Claude account use the terminal theme; tested with unit tests on real Claude Code output and in the browser demo, not yet in the desktop window with live sessions. New in 0.4.2: Claude Code themes generated from the terminal themes, including one that follows the terminal theme. New in 0.4.1: letter spacing for the terminal, and the font list now shows every installed font (it only offered a fixed set before). New in 0.4.0: automatic updates, SFTP files drawer, port forwarding, image paste and reliable copy, visible SSH reconnection and the *Need attention* list, MCP view and Consumption view; covered by unit tests, fake servers, a local sshd and the browser demo, but SFTP, tunnels and image upload have not been used yet against a real server from the desktop window (see the [changelog](CHANGELOG.md)). New in 0.3.0: usage history chart, SSH host folders, saved workspaces, agent card and notification sounds, tested with unit tests and in the browser demo but not yet with live agents or a real SSH server in the desktop build. New in 0.2.0: the MCP `run_command` tool, which is covered by automated tests with a fake runner and real local processes but has **not** been run against a real SSH server by the author yet. What is verified and what is not:
 
 - **Verified by automated tests**: grid model, settings, account policies, usage formatting, auto-compact decision, theme import,
   backup, i18n dictionaries (TypeScript); PTY, `~/.ssh/config` parser, token accounting, MCP protocol and security checks, askpass

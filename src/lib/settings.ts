@@ -17,7 +17,7 @@ import { cleanSoundId } from './sounds.ts';
 import type { SoundId } from './sounds.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
-export const APP_VERSION = '0.4.3';
+export const APP_VERSION = '0.4.4';
 
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
@@ -96,6 +96,8 @@ export interface Settings {
   usageQuery: boolean;
   /** Cada cuántos minutos se consulta el uso (2..30). */
   usageQueryMin: number;
+  /** Si el token de una cuenta caducó, la consulta automática pide a Claude Code que lo renueve (`claude auth status`). */
+  usageRenew: boolean;
   /** Auto-compact en inactividad (experimental, apagado por defecto). */
   autoCompact: boolean;
   /** Contexto mínimo (miles de tokens) para compactar. */
@@ -225,6 +227,7 @@ export const DEFAULTS: Settings = {
   notifyQuota: true,
   usageQuery: false,
   usageQueryMin: 5,
+  usageRenew: true,
   autoCompact: false,
   autoCompactCtxK: 150,
   autoCompactAfterMin: 50,
@@ -311,7 +314,7 @@ export const LIMITS = {
 export const SECTION_KEYS = {
   general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
   terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'claudeThemeSet', 'claudeMarkdownColor', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
-  agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
+  agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'usageRenew', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
     'sshHostKeyPolicy', 'sftpDownloadDir', 'sftpAskDownload', 'portsDetect', 'portsAutoOpen',
@@ -400,6 +403,7 @@ export function clampSettings(raw: unknown): Settings {
     notifyQuota: bool(r.notifyQuota, D.notifyQuota),
     usageQuery: bool(r.usageQuery, D.usageQuery),
     usageQueryMin: num(r.usageQueryMin, LIMITS.usageQueryMin, D.usageQueryMin),
+    usageRenew: bool(r.usageRenew, D.usageRenew),
     autoCompact: bool(r.autoCompact, D.autoCompact),
     autoCompactCtxK: num(r.autoCompactCtxK, LIMITS.autoCompactCtxK, D.autoCompactCtxK),
     autoCompactAfterMin: num(r.autoCompactAfterMin, LIMITS.autoCompactAfterMin, D.autoCompactAfterMin),

@@ -113,29 +113,37 @@ export function windowView(w: Window | undefined, now: number): WindowView | nul
   };
 }
 
-/** Fila extra: el límite activo de un modelo cuando va más gastado que el semanal general. */
+/** Fila extra: el límite semanal de un modelo (p. ej. Fable). */
 export interface ExtraView { label: string; view: WindowView }
 
+/** Como mucho tantas filas de modelo por cuenta (la barra lateral es estrecha). */
+export const MAX_EXTRA_ROWS = 2;
+
 /**
- * Límite extra a mostrar: entre los límites ACTIVOS con modelo (`scope`) y aún sin renovar, el más gastado, si supera al semanal
- * general (sin semanal, basta con que exista). Si no, `null`.
+ * Filas extra: los límites con modelo (`scope`) aún sin renovar, el más gastado primero, uno por modelo, máx. `MAX_EXTRA_ROWS`.
+ * Salen SIEMPRE, aunque vayan por debajo del semanal general: `active` (`is_active` de Anthropic) solo dice qué límite manda
+ * ahora mismo (con el semanal al 100 % el de Fable sale `active: false` aunque también esté al 100 %), no si el modelo se usa.
  */
-export function extraView(q: Quota | undefined, now: number): ExtraView | null {
-  const base = q?.sevenDay && q.sevenDay.resetsAt > now ? q.sevenDay.used : 0;
-  const best = (q?.limits ?? [])
-    .filter((l) => l.active && l.scope && l.resetsAt > now && l.percent > base)
-    .sort((a, b) => b.percent - a.percent)[0];
-  if (!best?.scope) return null;
-  const view = windowView({ used: best.percent, resetsAt: best.resetsAt }, now);
-  return view ? { label: best.scope, view } : null;
+export function extraViews(q: Quota | undefined, now: number): ExtraView[] {
+  const seen = new Set<string>();
+  const out: ExtraView[] = [];
+  for (const l of [...(q?.limits ?? [])].sort((a, b) => b.percent - a.percent)) {
+    if (!l.scope || l.resetsAt <= now || seen.has(l.scope)) continue;
+    const view = windowView({ used: l.percent, resetsAt: l.resetsAt }, now);
+    if (!view) continue;
+    seen.add(l.scope);
+    out.push({ label: l.scope, view });
+    if (out.length >= MAX_EXTRA_ROWS) break;
+  }
+  return out;
 }
 
 /** Qué mostrar de una cuenta: sin ninguna ventana ni límite = `null` (el llamador decide el texto vacío). */
-export function usageViews(q: Quota | undefined, now: number): { five: WindowView | null; seven: WindowView | null; extra: ExtraView | null } | null {
+export function usageViews(q: Quota | undefined, now: number): { five: WindowView | null; seven: WindowView | null; extras: ExtraView[] } | null {
   const five = windowView(q?.fiveHour, now);
   const seven = windowView(q?.sevenDay, now);
-  const extra = extraView(q, now);
-  return five || seven || extra ? { five, seven, extra } : null;
+  const extras = extraViews(q, now);
+  return five || seven || extras.length ? { five, seven, extras } : null;
 }
 
 /** Devuelve la cuenta a usar, o null en modo manual / si no hay ninguna con sesión. */

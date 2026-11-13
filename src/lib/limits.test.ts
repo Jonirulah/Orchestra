@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exhausted, extraView, nextReset, pickAccount, pressure, usageViews } from './policy.ts';
+import { exhausted, extraViews, MAX_EXTRA_ROWS, nextReset, pickAccount, pressure, usageViews } from './policy.ts';
 import type { Quota, QuotaLimit } from './policy.ts';
 import type { Account } from './model.ts';
 import { setLocale } from './i18n.ts';
@@ -52,33 +52,44 @@ test('reset-soonest follows an active scoped limit that resets first', () => {
   assert.equal(pickAccount('reset-soonest', [a, b], undefined, NOW)?.acc.id, 'b');
 });
 
-test('extraView: only an ACTIVE scoped limit above weekly-all, not renewed, with a model name', () => {
+test('extraViews: every scoped limit not renewed shows, active or not, above or below weekly-all', () => {
   const base = { sevenDay: { used: 29, resetsAt: NOW + D } };
-  const v = extraView({ ...base, limits: [scoped(40)] }, NOW);
-  assert.equal(v?.label, 'Fable');
-  assert.equal(v?.view.pct, 40);
-  assert.equal(extraView({ ...base, limits: [scoped(29)] }, NOW), null, 'equal is not higher');
-  assert.equal(extraView({ ...base, limits: [scoped(20)] }, NOW), null);
-  assert.equal(extraView({ ...base, limits: [scoped(60, { active: false })] }, NOW), null);
-  assert.equal(extraView({ ...base, limits: [scoped(60, { scope: undefined })] }, NOW), null);
-  assert.equal(extraView({ ...base, limits: [scoped(60, { resetsAt: NOW - 1 })] }, NOW), null);
-  assert.equal(extraView(undefined, NOW), null);
-  // the highest one wins
-  assert.equal(extraView({ ...base, limits: [scoped(50, { scope: 'A' }), scoped(80, { scope: 'B' }), scoped(60, { scope: 'C' })] }, NOW)?.label, 'B');
-  // without weekly-all any active scoped limit shows
-  assert.equal(extraView({ limits: [scoped(5)] }, NOW)?.label, 'Fable');
+  const v = extraViews({ ...base, limits: [scoped(40)] }, NOW);
+  assert.equal(v.length, 1);
+  assert.equal(v[0].label, 'Fable');
+  assert.equal(v[0].view.pct, 40);
+  assert.equal(extraViews({ ...base, limits: [scoped(29)] }, NOW)[0]?.view.pct, 29, 'equal to weekly-all still shows');
+  assert.equal(extraViews({ ...base, limits: [scoped(20)] }, NOW)[0]?.view.pct, 20, 'below weekly-all still shows');
+  assert.equal(extraViews({ ...base, limits: [scoped(60, { active: false })] }, NOW)[0]?.view.pct, 60, 'is_active=false still shows');
+  assert.deepEqual(extraViews({ ...base, limits: [scoped(60, { scope: undefined })] }, NOW), [], 'no model name, no row');
+  assert.deepEqual(extraViews({ ...base, limits: [scoped(60, { resetsAt: NOW - 1 })] }, NOW), [], 'renewed, no row');
+  assert.deepEqual(extraViews(undefined, NOW), []);
+  // the most used first, one row per model, capped
+  const many = extraViews({ ...base, limits: [scoped(50, { scope: 'A' }), scoped(80, { scope: 'B' }), scoped(60, { scope: 'C' }), scoped(90, { scope: 'B' })] }, NOW);
+  assert.equal(many.length, MAX_EXTRA_ROWS);
+  assert.deepEqual(many.map((x) => [x.label, x.view.pct]), [['B', 90], ['C', 60]]);
 });
 
-test('usageViews: no empty 5h row when five_hour is absent; extra row appears; nothing at all stays null', () => {
+test('extraViews: the real answers that hid Fable before now show it', () => {
+  // weekly-all at 100 % binds, so Anthropic marks Fable (also 100 %) as not active
+  const weeklyFull: Quota = { sevenDay: { used: 100, resetsAt: NOW + 4 * D }, limits: [scoped(100, { active: false, resetsAt: NOW + 4 * D })] };
+  assert.equal(extraViews(weeklyFull, NOW)[0]?.view.pct, 100);
+  // Fable below weekly-all
+  const belowWeekly: Quota = { sevenDay: { used: 100, resetsAt: NOW + 2 * D }, limits: [scoped(70, { active: false, resetsAt: NOW + 2 * D })] };
+  assert.equal(extraViews(belowWeekly, NOW)[0]?.view.pct, 70);
+});
+
+test('usageViews: no empty 5h row when five_hour is absent; extra rows appear; nothing at all stays null', () => {
   const v = usageViews({ sevenDay: { used: 29, resetsAt: NOW + D }, limits: [scoped(40)] }, NOW);
   assert.equal(v?.five, null);
   assert.equal(v?.seven?.pct, 29);
-  assert.equal(v?.extra?.label, 'Fable');
+  assert.equal(v?.extras[0]?.label, 'Fable');
   const w = usageViews({ sevenDay: { used: 29, resetsAt: NOW + D } }, NOW);
   assert.equal(w?.five, null);
-  assert.equal(w?.extra, null);
-  assert.equal(usageViews({ limits: [scoped(40)] }, NOW)?.extra?.label, 'Fable');
-  assert.equal(usageViews({ limits: [scoped(40, { active: false })] }, NOW), null);
+  assert.deepEqual(w?.extras, []);
+  assert.equal(usageViews({ limits: [scoped(40)] }, NOW)?.extras[0]?.label, 'Fable');
+  assert.equal(usageViews({ limits: [scoped(40, { active: false })] }, NOW)?.extras[0]?.label, 'Fable');
+  assert.equal(usageViews({ limits: [scoped(40, { resetsAt: NOW - 1 })] }, NOW), null);
   assert.equal(usageViews({}, NOW), null);
   assert.equal(usageViews(undefined, NOW), null);
 });

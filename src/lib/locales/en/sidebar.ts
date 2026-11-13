@@ -27,6 +27,8 @@ export default {
   'sidebar.background.closeTitle': 'Close this terminal',
   'sidebar.accounts.unchecked': 'sign-in not checked yet (Settings → Accounts)',
   'sidebar.accounts.viewTitle': 'Sort, group and filter accounts',
+  'sidebar.accounts.refreshTitle': 'Refresh accounts and usage now (renews expired sign-ins through Claude Code)',
+  'sidebar.accounts.refreshing': 'Refreshing…',
   'sidebar.accounts.filterAria': 'Show accounts of',
   'sidebar.accounts.chip.all': 'All',
   'sidebar.accounts.chip.claude': 'Claude',

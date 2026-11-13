@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Barras finas con la cuenta atrás hasta el reinicio: 5 h (solo si hay dato), 7 d y, si un límite activo de un modelo va
-  // más gastado que el semanal general, una fila más con el nombre del modelo.
+  // Barras finas con la cuenta atrás hasta el reinicio: 5 h (solo si hay dato), 7 d y una fila por cada límite semanal de un
+  // modelo (p. ej. Fable) que traiga la consulta a Anthropic, con el nombre del modelo.
   // Solo spans: se puede poner dentro de un <button>.
   import { app } from '../lib/store.svelte.ts';
   import { usageViews } from '../lib/policy.ts';
@@ -15,7 +15,7 @@
       ? [
           { key: '5h', label: '5h', v: views.five, tip: '' },
           { key: '7d', label: '7d', v: views.seven, tip: '' },
-          { key: 'x', label: views.extra?.label ?? '', v: views.extra?.view ?? null, tip: views.extra ? t('usage.bars.scopedTip', { name: views.extra.label }) : '' },
+          ...views.extras.map((x) => ({ key: `x:${x.label}`, label: x.label, v: x.view, tip: t('usage.bars.scopedTip', { name: x.label }) })),
         ].filter((r) => r.v)
       : [],
   );
@@ -29,7 +29,7 @@
     {#each rows as r (r.key)}
       {#if r.v}
         {@const full = r.tip ? r.tip + '\n' + r.v.tip : r.v.tip}
-        <span class="urow" class:stale={!!stale} class:scoped={r.key === 'x'} title={stale ? full + '\n' + stale : full}>
+        <span class="urow" class:stale={!!stale} class:scoped={r.key.startsWith('x:')} title={stale ? full + '\n' + stale : full}>
           <span class="ulbl">{r.label}</span>
           <span class="track"><span class="fill {r.v.level}" style:width="{r.v.pct}%"></span></span>
           <span class="upct {r.v.level}">{Math.round(r.v.pct)}%</span>

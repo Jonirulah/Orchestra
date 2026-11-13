@@ -142,6 +142,8 @@ class AppState {
   quota = $state<Record<string, Quota>>({});
   /** Resultado de la última consulta de uso a Anthropic por cuenta (vacío = apagada o aún sin consultar). */
   usageStatus = $state<Record<string, QueryEntry>>({});
+  /** El botón de refrescar de la barra lateral está trabajando. */
+  usageRefreshing = $state(false);
   /** «Ahora» en segundos, refrescado cada 30 s para que las cuentas atrás avancen sin volver a leer nada. */
   nowSec = $state(Math.floor(Date.now() / 1000));
   /** Ruta del `--settings` de Orchestra para los Claude nuevos (vacía = no capturar). */
@@ -419,14 +421,15 @@ class AppState {
     this.usageTimer = window.setInterval(() => void this.runUsageQuery(), clampIntervalMin(this.settings.usageQueryMin) * 60_000);
   }
 
-  /** Una pasada de consulta (todas las cuentas, o solo `only`). Devuelve los resultados; nunca lanza. */
-  async runUsageQuery(only?: string): Promise<UsageResult[]> {
+  /** Una pasada de consulta (todas las cuentas, o solo `only`). `manual` = la pidió el usuario (botón): suelo de 10 s y,
+   *  si un token caducó, siempre se pide a Claude Code que lo renueve; la automática solo con `usageRenew`. Nunca lanza. */
+  async runUsageQuery(only?: string, manual = false): Promise<UsageResult[]> {
     if (!this.settings.usageQuery || (!only && this.usageBusy)) return [];
     const targets = this.usageTargets(only);
     if (!targets.length) return [];
     if (!only) this.usageBusy = true;
     try {
-      const list = await be.usageFetch(targets, clampIntervalMin(this.settings.usageQueryMin));
+      const list = await be.usageFetch(targets, clampIntervalMin(this.settings.usageQueryMin), { force: manual, renew: manual || this.settings.usageRenew });
       const now = Math.floor(Date.now() / 1000);
       const next = { ...$state.snapshot(this.usageStatus) };
       for (const r of list) if (this.accountById(r.accountId)) next[r.accountId] = toEntry(r, now);
@@ -442,7 +445,32 @@ class AppState {
 
   /** «Probar ahora» de una cuenta (solo con la consulta encendida). */
   testUsage(accountId: string): Promise<UsageResult[]> {
-    return this.runUsageQuery(accountId);
+    return this.runUsageQuery(accountId, true);
+  }
+
+  /** Botón de refrescar de la barra lateral: vuelve a leer las cuentas (sesión, correo, plan) y, con la consulta encendida,
+   *  pide el uso de todas ya (renovando con Claude Code los tokens caducados). Avisa del resultado con un toast. */
+  async refreshUsage(): Promise<void> {
+    if (this.usageRefreshing) return;
+    this.usageRefreshing = true;
+    try {
+      try { this.profiles = await be.claudeProfiles(); } catch { /* se queda con lo que había */ }
+      if (!this.settings.usageQuery) {
+        await this.pollQuota();
+        this.toast(t('store.toast.usageRefreshOff'));
+        return;
+      }
+      // Si hay una pasada automática en marcha, se espera a que acabe (como mucho ~1 min) para no saltársela.
+      for (let i = 0; this.usageBusy && i < 300; i++) await new Promise((r) => setTimeout(r, 200));
+      const list = await this.runUsageQuery(undefined, true);
+      if (!list.length) { this.toast(t('store.toast.usageRefreshNone')); return; }
+      const bad = list.filter((r) => r.status !== 'ok');
+      const names = bad.map((r) => displayName(this.accountById(r.accountId)?.name ?? r.accountId)).join(', ');
+      this.toast(bad.length === 0 ? t('store.toast.usageRefreshOk', { n: list.length })
+        : t('store.toast.usageRefreshPartial', { ok: list.length - bad.length, n: list.length, names }));
+    } finally {
+      this.usageRefreshing = false;
+    }
   }
 
   persist(): void {

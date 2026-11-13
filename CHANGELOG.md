@@ -5,6 +5,21 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-13
+
+### Added
+- **Refresh button** in the sidebar, next to sorting in *Accounts*: re-reads the accounts and, with *Usage from Anthropic* on,
+  asks for the usage of every account right away. A toast says how many were updated and which ones were not.
+- **Renew expired sign-ins** (Settings → Agents → *Usage from Anthropic*, on by default): an account that has been idle has an
+  expired token, so its bars kept showing data from hours before. Orchestra now runs `claude auth status` in that account and
+  Claude Code renews its own token, exactly as when you open Claude there. Orchestra still never reads the refresh token. If the
+  renewal fails, the automatic query waits 30 minutes before trying that account again; the refresh button always tries.
+
+### Fixed
+- **The Fable (per-model) weekly bar was often missing**: it only showed when Anthropic marked that limit as active and it was
+  above the general weekly limit. Anthropic's *active* flag means "the limit that binds right now", so with the weekly limit at
+  100 % Fable came as not active even at 100 %. Every per-model weekly limit now has its own row (up to two per account).
+
 ## [0.4.3] - 2026-11-11
 
 ### Added

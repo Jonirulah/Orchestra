@@ -144,6 +144,10 @@
     <div class="lbl"><b>{t('settings.usage.intervalLabel')}</b><small>{t('settings.usage.intervalHint')}</small></div>
     <div class="ctl"><Slider value={s.usageQueryMin} min={LIMITS.usageQueryMin[0]} max={LIMITS.usageQueryMin[1]} unit=" min" onchange={(v) => app.setting('usageQueryMin', v)} /></div>
   </div>
+  <div class="s-row">
+    <div class="lbl"><b>{t('settings.usage.renewLabel')}</b><small>{t('settings.usage.renewHint')}</small></div>
+    <div class="ctl"><Toggle value={s.usageRenew} label={t('settings.usage.renewLabel')} onchange={(v) => app.setting('usageRenew', v)} /></div>
+  </div>
 {/if}
 
 <div class="s-row">
