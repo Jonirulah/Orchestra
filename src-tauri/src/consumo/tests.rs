@@ -247,21 +247,23 @@ fn escaneo_incremental_con_indice() {
     std::fs::write(subs.join("agent-abc.meta.json"), r#"{"agentType":"Explore","description":"buscar"}"#).unwrap();
     let idx = d.join("data").join("consumo").join("index.json");
     let cancel = AtomicBool::new(false);
+    // Las fixtures tienen fecha fija (2026-11-04): con una ventana de 7 días la prueba caducaba sola. 100 años.
+    const DIAS: u64 = 36_500;
     // Dos «cuentas» con la misma carpeta projects.
     let dirs = vec![acc.clone(), acc.clone()];
     let mut n = 0;
-    let r1 = scan(&dirs, 7, &idx, &cancel, |_, _| n += 1);
+    let r1 = scan(&dirs, DIAS, &idx, &cancel, |_, _| n += 1);
     assert_eq!((r1.files, r1.main_files, r1.sub_files, r1.files_read), (2, 1, 1, 2));
     assert_eq!(n, 2);
     assert!(r1.by_who.iter().any(|w| w.0 == "sub:Explore"));
-    let r2 = scan(&dirs, 7, &idx, &cancel, |_, _| {});
+    let r2 = scan(&dirs, DIAS, &idx, &cancel, |_, _| {});
     assert_eq!(r2.files_read, 0);
     assert!(same(&serde_json::to_value(&r2.cats).unwrap(), &serde_json::to_value(&r1.cats).unwrap()));
     // Crece el principal: solo se lee lo añadido.
     let mut fh = std::fs::OpenOptions::new().append(true).open(&main).unwrap();
     fh.write_all(&main_txt.as_bytes()[half..]).unwrap();
     drop(fh);
-    let r3 = scan(&dirs, 7, &idx, &cancel, |_, _| {});
+    let r3 = scan(&dirs, DIAS, &idx, &cancel, |_, _| {});
     assert_eq!(r3.files_read, 1);
     assert!(r3.bytes_read < main_txt.len() as u64);
     let direct = analyze_file(&main).unwrap().summary(5);
@@ -281,7 +283,7 @@ fn escaneo_incremental_con_indice() {
     assert!(!txt.contains(&"x".repeat(81)));
     // Cancelado: no procesa nada.
     cancel.store(true, Ordering::Relaxed);
-    assert!(scan(&dirs, 7, &idx, &cancel, |_, _| {}).cancelled);
+    assert!(scan(&dirs, DIAS, &idx, &cancel, |_, _| {}).cancelled);
     let _ = std::fs::remove_dir_all(&d);
 }
 

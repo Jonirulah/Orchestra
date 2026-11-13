@@ -702,9 +702,11 @@ mod e2e {
 
     /// El exe real (el de pruebas no sabe hacer de askpass).
     fn bin() -> PathBuf {
-        let p = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("orchestra.exe");
-        assert!(p.is_file(), "falta {p:?}: ejecuta `cargo test` completo (compila el exe real)");
-        p
+        // Se busca hacia arriba desde el exe de pruebas: hasta Rust 1.99 vivía en target/debug/deps; desde la 1.100, más abajo
+        // (target/debug/build/orchestra/<hash>/…). El exe real sigue en target/debug.
+        let me = std::env::current_exe().unwrap();
+        let p = me.ancestors().skip(1).map(|d| d.join("orchestra.exe")).find(|p| p.is_file());
+        p.unwrap_or_else(|| panic!("falta orchestra.exe encima de {me:?}: ejecuta `cargo test` completo (compila el exe real)"))
     }
 
     /// Lo que genera `sshArgs()` para un host con contraseña guardada, con `StrictHostKeyChecking=<strict>`,
