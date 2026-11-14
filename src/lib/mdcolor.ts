@@ -12,11 +12,18 @@
 // quita (vuelve al color real) cuando deja de aplicar. Nunca modifica ni quita bytes de la salida: solo inserta SGR
 // completos detrás de un SGR ya terminado, así que un trozo partido a mitad de secuencia o de un carácter UTF-8 pasa tal
 // cual (xterm lo junta) y el estado del analizador se conserva entre trozos.
+//
+// El color insertado NO va en truecolor sino en tres ranuras de la paleta de 256 colores (MD_SLOTS: `ESC[38;5;Nm`), y el
+// RGB de cada ranura lo pone el tema de xterm del panel (`mdTermTheme`: `extendedAnsi` con la paleta estándar y las tres
+// ranuras con `mdPalette(tema)`). Así, al cambiar de tema, xterm repinta también el texto ya escrito. Las ranuras solo se
+// redefinen en los paneles con el reescritor activo (los de Claude): en los demás 253-255 siguen siendo los grises de siempre.
+// Los colores que elige el usuario en Ajustes (`claudeMdColors`) sustituyen a los automáticos: `mdPalette(tema, propios)`.
 
-import { contrast, luminance, mix, parseColor } from './claudetheme.ts';
+import { contrast, hex, luminance, mix, parseColor } from './claudetheme.ts';
 import type { TermTheme } from './themes.ts';
 import { providerOf } from './model.ts';
 import type { Account, Pane } from './model.ts';
+import type { ClaudeMdColors } from './settings.ts';
 
 type RGB = [number, number, number];
 
@@ -67,7 +74,7 @@ function neutral(c: RGB): boolean {
  * texto #24292f se lee como texto). Si ninguno se distingue, el primero con contraste; si ninguno llega a 4,5:1, el de más
  * contraste acercado al color del texto lo justo para llegar (sigue siendo de su tono).
  */
-export function mdPalette(t: TermTheme): MdPalette {
+export function mdPalette(t: TermTheme, own?: Partial<ClaudeMdColors> | null): MdPalette {
   const bg = parseColor(t.background) ?? [0, 0, 0];
   const fg = parseColor(t.foreground) ?? [255, 255, 255];
   const lfg = lstar(fg);
@@ -87,10 +94,12 @@ export function mdPalette(t: TermTheme): MdPalette {
     taken.push(c);
     return c;
   };
+  // Un color propio no entra en «taken»: los automáticos de los demás usos salen como si no estuviera (no cambian al elegirlo).
   const h1 = pick(MD_CANDIDATES.h1);
   const bold = pick(MD_CANDIDATES.bold);
   const italic = pick(MD_CANDIDATES.italic);
-  return { h1, bold, italic, text: [fg, [255, 255, 255], [0, 0, 0]] };
+  const ownOr = (v: string | null | undefined, auto: RGB): RGB => (v && parseColor(v)) || auto;
+  return { h1: ownOr(own?.h1, h1), bold: ownOr(own?.bold, bold), italic: ownOr(own?.italic, italic), text: [fg, [255, 255, 255], [0, 0, 0]] };
 }
 
 /**
@@ -100,6 +109,57 @@ export function mdPalette(t: TermTheme): MdPalette {
 export function isClaudePane(p: Pick<Pane, 'kind' | 'ref'>, accounts: readonly Pick<Account, 'id' | 'provider'>[]): boolean {
   if (p.kind !== 'agent' || p.ref === 'codex') return false;
   return providerOf(accounts.find((a) => a.id === p.ref)) === 'claude';
+}
+
+// ---------- ranuras de la paleta de 256 colores ----------
+
+/**
+ * Índices de la paleta de 256 colores que llevan el color del markdown. Los tres últimos grises (253-255) porque: Claude Code
+ * no emite colores de 256 (pinta en truecolor; comprobado en docs/dev-notes/fixtures_claude/), y solo se redefinen en el
+ * tema de los paneles con el reescritor activo, así que un shell o un SSH que use 255 como «blanco» no cambia.
+ */
+export const MD_SLOTS = { h1: 253, bold: 254, italic: 255 } as const;
+
+/** Paleta estándar de xterm-256 para los índices 16..255 (cubo 6×6×6 y rampa de grises), en hex. */
+export function xterm256(): string[] {
+  const out: string[] = [];
+  const lv = [0, 95, 135, 175, 215, 255];
+  for (let i = 16; i < 232; i++) { const n = i - 16; out.push(hex([lv[Math.floor(n / 36)], lv[Math.floor(n / 6) % 6], lv[n % 6]])); }
+  for (let i = 232; i < 256; i++) { const v = 8 + (i - 232) * 10; out.push(hex([v, v, v])); }
+  return out;
+}
+const XTERM256 = xterm256();
+
+/** `extendedAnsi` de xterm (índices 16..255): la paleta estándar con las ranuras de MD_SLOTS en los colores de `pal`. */
+export function mdExtendedAnsi(pal: Pick<MdPalette, 'h1' | 'bold' | 'italic'>): string[] {
+  const out = XTERM256.slice();
+  out[MD_SLOTS.h1 - 16] = hex(pal.h1);
+  out[MD_SLOTS.bold - 16] = hex(pal.bold);
+  out[MD_SLOTS.italic - 16] = hex(pal.italic);
+  return out;
+}
+
+/** Clave de los colores propios (para cachés y para saber si han cambiado): «h1|bold|italic», vacío = automático. */
+export function mdOwnKey(own?: Partial<ClaudeMdColors> | null): string {
+  return `${own?.h1 ?? ''}|${own?.bold ?? ''}|${own?.italic ?? ''}`;
+}
+
+const mdThemeCache = new WeakMap<TermTheme, Map<string, TermTheme & { extendedAnsi: string[] }>>();
+/**
+ * Tema de xterm para un panel con el reescritor activo: el tema con las ranuras del markdown (automáticas o las propias).
+ * Mismo tema y mismos colores propios => mismo objeto (la clave de la caché incluye los propios).
+ */
+export function mdTermTheme(t: TermTheme, own?: Partial<ClaudeMdColors> | null): TermTheme & { extendedAnsi: string[] } {
+  let byOwn = mdThemeCache.get(t);
+  if (!byOwn) { byOwn = new Map(); mdThemeCache.set(t, byOwn); }
+  const k = mdOwnKey(own);
+  let m = byOwn.get(k);
+  if (!m) {
+    if (byOwn.size >= 16) byOwn.clear(); // arrastrar el selector de color crea uno por tono: que no crezca sin fin
+    m = { ...t, extendedAnsi: mdExtendedAnsi(mdPalette(t, own)) };
+    byOwn.set(k, m);
+  }
+  return m;
 }
 
 // ---------- reescritor ----------
@@ -128,8 +188,8 @@ export class MdColorizer {
   private inverse = false;
   private fg: number = Fg.Default;
   private fgSgr = '';
-  /** Color que hemos puesto encima (null = el terminal tiene el primer plano real). */
-  private painted: RGB | null = null;
+  /** Ranura (MD_SLOTS) que hemos puesto encima (0 = ninguna: el terminal tiene el primer plano real). */
+  private painted = 0;
   /** Inserciones del último `feed` (posición en el trozo de entrada y SGR): para las pruebas. */
   lastInserts: { at: number; s: string }[] | null = null;
   /** Colores «text» de la última paleta (sirven aunque se apague el color, para restaurar bien). */
@@ -139,7 +199,7 @@ export class MdColorizer {
   reset(): void {
     this.st = GROUND; this.len = 0; this.bad = false;
     this.bold = this.italic = this.under = this.inverse = false;
-    this.fg = Fg.Default; this.fgSgr = ''; this.painted = null;
+    this.fg = Fg.Default; this.fgSgr = ''; this.painted = 0;
   }
 
   /**
@@ -267,23 +327,24 @@ export class MdColorizer {
       k = e;
     }
     // Tras este SGR el terminal tiene el primer plano real si lo tocó; si no, sigue con el nuestro.
-    if (fgTouched) this.painted = null;
+    if (fgTouched) this.painted = 0;
     const want = this.want(pal);
     if (want) {
-      if (this.painted && same(this.painted, want)) return '';
+      if (this.painted === want) return '';
       this.painted = want;
-      return `\x1b[38;2;${want[0]};${want[1]};${want[2]}m`;
+      return `\x1b[38;5;${want}m`;
     }
     if (!this.painted) return '';
-    this.painted = null;
+    this.painted = 0;
     return this.fg === Fg.Text ? this.fgSgr : '\x1b[39m';
   }
 
-  private want(pal: MdPalette | null): RGB | null {
-    if (!pal || this.inverse || this.fg === Fg.Other) return null;
-    if (this.bold && this.italic && this.under) return pal.h1;
-    if (this.bold) return pal.bold;
-    if (this.italic) return pal.italic;
-    return null;
+  /** Ranura que toca según el estado SGR real (0 = ninguna). El RGB lo pone el tema del panel (mdTermTheme). */
+  private want(pal: MdPalette | null): number {
+    if (!pal || this.inverse || this.fg === Fg.Other) return 0;
+    if (this.bold && this.italic && this.under) return MD_SLOTS.h1;
+    if (this.bold) return MD_SLOTS.bold;
+    if (this.italic) return MD_SLOTS.italic;
+    return 0;
   }
 }

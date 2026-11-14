@@ -1,6 +1,7 @@
 // Registro de terminales xterm.js. Cada panel tiene UNA instancia de xterm que vive
 // aunque el panel se desmonte (cambio de espacio, maximizar...): solo se reparenta su DOM.
 import { Terminal } from '@xterm/xterm';
+import type { ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -14,7 +15,8 @@ import { themeOf } from './themes.ts';
 import type { TermTheme } from './themes.ts';
 import { parseOsc7, parseOsc9, withCwdTracking } from './gitinfo.ts';
 import { copiedCount, ctrlCAction, parseOsc52, rightClickAction, shouldHintShift } from './termcopy.ts';
-import { MdColorizer } from './mdcolor.ts';
+import { MdColorizer, mdOwnKey, mdTermTheme } from './mdcolor.ts';
+import type { ClaudeMdColors } from './settings.ts';
 import type { MdPalette } from './mdcolor.ts';
 
 export interface TermHooks {
@@ -82,6 +84,8 @@ export interface TermOptions {
   copyOnSelect: boolean;
   rightClick: 'smart' | 'paste' | 'none';
   bell: 'flash' | 'none';
+  /** Colores propios del markdown de Claude (null = automático según el tema). */
+  mdColors?: ClaudeMdColors;
 }
 
 interface Entry {
@@ -100,6 +104,11 @@ interface Entry {
 }
 
 const entries = new Map<string, Entry>();
+
+/** Tema de xterm de un panel: con el reescritor del markdown activo lleva sus ranuras de 256 colores (ver mdcolor.ts). */
+function themeFor(e: Pick<Entry, 'md'>, theme: TermTheme = opts.theme, own: ClaudeMdColors | undefined = opts.mdColors): ITheme {
+  return e.md ? { ...mdTermTheme(theme, own) } : { ...theme };
+}
 let hooks: TermHooks;
 const MAX_WEBGL = 12; // WebView2/Chromium admite ~16 contextos WebGL a la vez
 let webglCount = 0;
@@ -340,7 +349,10 @@ async function attach(entry: Entry): Promise<void> {
   const code = await be.ptyAttach(entry.id, (b) => {
     if (!seen) { seen = true; hooks.onOutput(entry.id, true); }
     const pal = hooks.mdColors?.(entry.id) ?? null;
-    if (pal && !entry.md) entry.md = new MdColorizer();
+    if (pal && !entry.md) {
+      entry.md = new MdColorizer();
+      entry.term.options.theme = themeFor(entry); // las ranuras del markdown toman los colores del tema
+    }
     entry.term.write(entry.md ? entry.md.feed(b, pal) : b);
     outputTap?.(entry.id, b);
   });
@@ -431,6 +443,7 @@ export function setFontSize(size: number): void {
 /** Aplica las opciones a todas las terminales abiertas (y a las que se creen después) y reajusta su tamaño. */
 export function applyOptions(o: TermOptions): void {
   const themeChanged = o.theme !== opts.theme; // themeOf() devuelve siempre el mismo objeto por tema
+  const mdChanged = mdOwnKey(o.mdColors) !== mdOwnKey(opts.mdColors); // colores propios del markdown
   opts = o;
   for (const e of entries.values()) {
     const t = e.term.options;
@@ -441,7 +454,8 @@ export function applyOptions(o: TermOptions): void {
     if (t.cursorStyle !== o.cursorStyle) t.cursorStyle = o.cursorStyle;
     if (t.cursorBlink !== o.cursorBlink) t.cursorBlink = o.cursorBlink;
     if (t.scrollback !== o.scrollback) t.scrollback = o.scrollback;
-    if (themeChanged) t.theme = { ...o.theme };
+    // Las ranuras del markdown también (tema o colores propios): xterm repinta lo ya escrito.
+    if (themeChanged || (mdChanged && e.md)) t.theme = themeFor(e, o.theme, o.mdColors);
     fitNow(e.id);
   }
 }

@@ -184,7 +184,7 @@ class AppState {
   /** Temas de color importados por el usuario. Van aparte de `settings` para que «copiar ajustes» no los arrastre. */
   customThemes = $state<ThemeDef[]>([]);
   /** Colores del markdown de Claude para el tema actual (cambian con el tema). */
-  private mdPal = $derived(mdPalette(resolveTheme(this.settings.theme, this.customThemes)));
+  private mdPal = $derived(mdPalette(resolveTheme(this.settings.theme, this.customThemes), this.settings.claudeMdColors));
   toastMsg = $state('');
   /** Auto-compact: últimos 20 compactados (solo en memoria). */
   compactLog = $state<CompactLogEntry[]>([]);
@@ -1457,6 +1457,7 @@ class AppState {
       fontFamily: fontStack(s.fontFamily), fontSize: s.fontSize, lineHeight: s.lineHeight, letterSpacing: s.letterSpacing,
       cursorStyle: s.cursorStyle, cursorBlink: s.cursorBlink, scrollback: s.scrollback,
       theme: resolveTheme(s.theme, this.customThemes), copyOnSelect: s.copyOnSelect, rightClick: s.rightClick, bell: s.bell,
+      mdColors: { ...s.claudeMdColors },
     };
   }
 
@@ -1605,6 +1606,9 @@ class AppState {
     this.activeId = next.workspaces.some((w) => w.id === next.activeId) ? next.activeId : next.workspaces[0].id;
     for (const w of this.workspaces) for (const p of w.panes) this.refreshSshSpec(p); // como al arrancar: los paneles de un host toman su método de acceso
     this.replaceSettings(next.settings);
+    // Un tema propio con el mismo id y otros colores no cambia `settings.theme`: aplicar el tema igualmente (si es el mismo objeto, no hace nada).
+    T.applyOptions(this.termOptions());
+    this.applyAppearance();
     this.syncAccounts();
     this.persistNow();
     void this.prepareUsage();

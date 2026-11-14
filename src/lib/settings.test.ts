@@ -417,3 +417,21 @@ test('Claude markdown color is on by default (also for old settings), setting th
   assert.equal(clampSettings({ claudeThemeSet: true }).claudeThemeSet, true);
   assert.ok(SECTION_KEYS.terminal.includes('claudeMarkdownColor') && SECTION_KEYS.terminal.includes('claudeThemeSet'));
 });
+
+test('claudeMdColors: hex #rrggbb (lowercased) or null per slot; anything else falls back to automatic', () => {
+  assert.deepEqual(DEFAULTS.claudeMdColors, { h1: null, bold: null, italic: null });
+  assert.deepEqual(clampSettings({}).claudeMdColors, { h1: null, bold: null, italic: null });
+  assert.deepEqual(clampSettings({ claudeMdColors: { h1: '#FF00AA', bold: null, italic: '#00ff00' } }).claudeMdColors,
+    { h1: '#ff00aa', bold: null, italic: '#00ff00' });
+  assert.deepEqual(clampSettings({ claudeMdColors: { h1: 'red', bold: '#fff', italic: 42, extra: '#000000' } }).claudeMdColors,
+    { h1: null, bold: null, italic: null });
+  assert.deepEqual(clampSettings({ claudeMdColors: 'nope' }).claudeMdColors, { h1: null, bold: null, italic: null });
+  assert.deepEqual(clampSettings({ claudeMdColors: ['#ff0000'] }).claudeMdColors, { h1: null, bold: null, italic: null });
+  // Sección Terminal (restablecer) e importar.
+  assert.ok((SECTION_KEYS.terminal as readonly string[]).includes('claudeMdColors'));
+  const cur = clampSettings({ claudeMdColors: { h1: '#123456', bold: null, italic: null } });
+  assert.deepEqual(resetSection(cur, 'terminal').claudeMdColors, { h1: null, bold: null, italic: null });
+  const imp = parseImport('{"claudeMdColors":{"bold":"#ABCDEF","h1":"x"}}', cur);
+  assert.ok(imp.ok);
+  if (imp.ok) assert.deepEqual(imp.settings.claudeMdColors, { h1: null, bold: '#abcdef', italic: null });
+});

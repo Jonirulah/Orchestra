@@ -22,6 +22,9 @@ export const APP_VERSION = '0.4.4';
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
 export type BellMode = 'flash' | 'none';
+/** Colores elegidos para el markdown de Claude (`#rrggbb`); null = automático (según el tema, ver mdcolor.ts). */
+export interface ClaudeMdColors { h1: string | null; bold: string | null; italic: string | null }
+export const MD_COLOR_KEYS = ['h1', 'bold', 'italic'] as const;
 
 export interface Settings {
   // --- General ---
@@ -57,6 +60,8 @@ export interface Settings {
   claudeThemeSet: boolean;
   /** Colorear títulos, negrita y cursiva del markdown de Claude en sus paneles con la paleta del tema (mdcolor.ts). */
   claudeMarkdownColor: boolean;
+  /** Colores propios del markdown de Claude (título, negrita, cursiva); null = el automático del tema. */
+  claudeMdColors: ClaudeMdColors;
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
   scrollback: number;
@@ -203,6 +208,7 @@ export const DEFAULTS: Settings = {
   claudeThemes: false,
   claudeThemeSet: false,
   claudeMarkdownColor: true,
+  claudeMdColors: { h1: null, bold: null, italic: null },
   cursorStyle: 'bar',
   cursorBlink: true,
   scrollback: 5000,
@@ -313,7 +319,7 @@ export const LIMITS = {
 /** Claves que reinicia «Reset section» en cada sección con ajustes. */
 export const SECTION_KEYS = {
   general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
-  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'claudeThemeSet', 'claudeMarkdownColor', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
+  terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'claudeThemeSet', 'claudeMarkdownColor', 'claudeMdColors', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
   agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'usageRenew', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
@@ -352,6 +358,13 @@ export function isHexColor(v: unknown): v is string {
   return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
 }
 
+/** Colores del markdown: cada uno `#rrggbb` (en minúsculas) o null (automático); lo demás cae a null. Siempre un objeto nuevo. */
+export function cleanMdColors(v: unknown): ClaudeMdColors {
+  const r = isObj(v) ? v : {};
+  const c = (x: unknown) => (isHexColor(x) ? x.toLowerCase() : null);
+  return { h1: c(r.h1), bold: c(r.bold), italic: c(r.italic) };
+}
+
 /**
  * Valida cualquier cosa y devuelve unos ajustes completos y válidos. Nunca lanza:
  * lo inválido cae al valor por defecto, lo fuera de rango se recorta y las claves
@@ -378,6 +391,7 @@ export function clampSettings(raw: unknown): Settings {
     claudeThemes: bool(r.claudeThemes, D.claudeThemes),
     claudeThemeSet: bool(r.claudeThemeSet, D.claudeThemeSet),
     claudeMarkdownColor: bool(r.claudeMarkdownColor, D.claudeMarkdownColor),
+    claudeMdColors: cleanMdColors(r.claudeMdColors),
     cursorStyle: oneOf(r.cursorStyle, CURSOR_STYLES, D.cursorStyle),
     cursorBlink: bool(r.cursorBlink, D.cursorBlink),
     scrollback: (SCROLLBACK_CHOICES as readonly unknown[]).includes(r.scrollback) ? (r.scrollback as number) : D.scrollback,

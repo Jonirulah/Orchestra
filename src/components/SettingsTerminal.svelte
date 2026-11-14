@@ -1,6 +1,9 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte.ts';
-  import { FONT_PRESETS, LIMITS, SCROLLBACK_CHOICES } from '../lib/settings.ts';
+  import { FONT_PRESETS, LIMITS, MD_COLOR_KEYS, SCROLLBACK_CHOICES } from '../lib/settings.ts';
+  import type { ClaudeMdColors } from '../lib/settings.ts';
+  import { mdPalette } from '../lib/mdcolor.ts';
+  import { hex } from '../lib/claudetheme.ts';
   import { ANSI_KEYS, DEFAULT_THEME, MAX_CUSTOM_THEMES, allThemes, hasTheme, resolveTheme } from '../lib/themes.ts';
   import type { ThemeDef } from '../lib/themes.ts';
   import { MAX_INPUT_BYTES, exportTheme, parseTheme, slugOf } from '../lib/themeimport.ts';
@@ -36,6 +39,17 @@
   const themeId = $derived(hasTheme(s.theme, app.customThemes) ? s.theme : DEFAULT_THEME);
   const th = $derived(resolveTheme(s.theme, app.customThemes));
   const current = $derived(app.customThemes.find((d) => d.id === themeId));
+
+  // ---------- colores del markdown de Claude ----------
+  // Automático = la paleta del tema (mdPalette); el propio lo sustituye. Cambiarlo repinta al momento lo ya escrito.
+  const mdAuto = $derived(mdPalette(th));
+  const mdEff = $derived(mdPalette(th, s.claudeMdColors));
+  const mdOwnAny = $derived(MD_COLOR_KEYS.some((k) => s.claudeMdColors[k]));
+  const mdName = (k: keyof ClaudeMdColors) =>
+    t(k === 'h1' ? 'settings.terminal.mdOwnH1' : k === 'bold' ? 'settings.terminal.mdOwnBold' : 'settings.terminal.mdOwnItalic');
+  function setMdColor(k: keyof ClaudeMdColors, v: string | null): void {
+    app.setting('claudeMdColors', { ...s.claudeMdColors, [k]: v });
+  }
 
   // ---------- importar / exportar temas ----------
   let msg = $state<{ ok: boolean; text: string; details: string[] } | null>(null);
@@ -322,6 +336,27 @@
     <div class="lbl"><b>{t('settings.terminal.mdColorLabel')}</b><small>{t('settings.terminal.mdColorHint')}</small></div>
     <div class="ctl"><Toggle value={s.claudeMarkdownColor} label={t('settings.terminal.mdColorLabel')} onchange={(v) => app.setting('claudeMarkdownColor', v)} /></div>
   </div>
+
+  {#if s.claudeMarkdownColor}
+    <div class="s-row stack">
+      <div class="lbl"><b>{t('settings.terminal.mdOwnLabel')}</b><small>{t('settings.terminal.mdOwnHint')}</small></div>
+      <div class="s-preview s-mdprev" style:background={th.background} style:color={th.foreground}>
+        <div><b><i><u style:color={hex(mdEff.h1)}>{mdName('h1')}</u></i></b></div>
+        <div><b style:color={hex(mdEff.bold)}>{mdName('bold')}</b> · <i style:color={hex(mdEff.italic)}>{mdName('italic')}</i></div>
+      </div>
+      <div class="s-mdcolors">
+        {#each MD_COLOR_KEYS as k (k)}
+          {@const own = s.claudeMdColors[k]}
+          <span class="name">{mdName(k)}</span>
+          <input type="color" value={hex(mdEff[k])} title={t('settings.terminal.mdOwnPick', { name: mdName(k) })} aria-label={t('settings.terminal.mdOwnPick', { name: mdName(k) })}
+            oninput={(e) => setMdColor(k, (e.currentTarget as HTMLInputElement).value)} />
+          <code class="hexv" class:auto={!own}>{hex(mdEff[k])}</code>
+          <button type="button" class="btn ghost auto" class:on={!own} aria-pressed={!own} title={t('settings.terminal.mdOwnAutoOn', { color: hex(mdAuto[k]) })} onclick={() => setMdColor(k, null)}>{t('settings.terminal.mdOwnAuto')}</button>
+        {/each}
+      </div>
+      <div class="s-actions"><button class="btn" disabled={!mdOwnAny} onclick={() => app.setting('claudeMdColors', { h1: null, bold: null, italic: null })}>{t('settings.terminal.mdOwnReset')}</button></div>
+    </div>
+  {/if}
 
   <div class="s-row stack">
     <div class="lbl">

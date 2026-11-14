@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { MD_MIN_CONTRAST, MdColorizer, isClaudePane, mdPalette } from './mdcolor.ts';
+import { MD_MIN_CONTRAST, MD_SLOTS, MdColorizer, isClaudePane, mdExtendedAnsi, mdOwnKey, mdPalette, mdTermTheme, xterm256 } from './mdcolor.ts';
 import type { MdPalette } from './mdcolor.ts';
 import { contrast, hex, parseColor } from './claudetheme.ts';
 import { allThemes, themeOf } from './themes.ts';
@@ -9,7 +9,8 @@ import { allThemes, themeOf } from './themes.ts';
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const PAL: MdPalette = { h1: [1, 1, 1], bold: [2, 2, 2], italic: [3, 3, 3], text: [[200, 200, 200], [255, 255, 255], [0, 0, 0]] };
-const H1 = '\x1b[38;2;1;1;1m', BOLD = '\x1b[38;2;2;2;2m', ITAL = '\x1b[38;2;3;3;3m';
+// El color va en las ranuras de 256 colores (el RGB lo pone el tema de xterm del panel): 253 = título, 254 = negrita, 255 = cursiva.
+const H1 = '\x1b[38;5;253m', BOLD = '\x1b[38;5;254m', ITAL = '\x1b[38;5;255m';
 
 /** Pasa un texto por un reescritor nuevo, en trozos de `step` bytes (0 = de una vez). */
 function run(s: string, step = 0, pal: MdPalette | null = PAL, md = new MdColorizer()): string {
@@ -19,9 +20,9 @@ function run(s: string, step = 0, pal: MdPalette | null = PAL, md = new MdColori
   for (let i = 0; i < b.length; i += step) parts.push(md.feed(b.subarray(i, i + step), pal));
   return dec.decode(Buffer.concat(parts));
 }
-/** Quita los SGR insertados por el reescritor (colores de PAL y las restauraciones que siguen a un SGR). */
+/** Quita los SGR insertados por el reescritor (ranuras del markdown y las restauraciones que siguen a un SGR). */
 function strip(s: string): string {
-  return s.replace(/\x1b\[38;2;[123];[123];[123]m/g, '').replace(/(\x1b\[[0-9;:]*m)\x1b\[(39|38;2;200;200;200|38;2;255;255;255)m/g, '$1');
+  return s.replace(/\x1b\[38;5;25[345]m/g, '').replace(/(\x1b\[[0-9;:]*m)\x1b\[(39|38;2;200;200;200|38;2;255;255;255)m/g, '$1');
 }
 
 test('bold, italic and # title in the default foreground get their colors; the reset puts the default back', () => {
@@ -129,7 +130,8 @@ const FIXTURES: [string, string][] = [
 /** Texto pintado con cada color de la paleta (los saltos de cursor de ConPTY cuentan como espacio). */
 function painted(out: string, pal: MdPalette): Record<'h1' | 'bold' | 'italic', string[]> {
   const res = { h1: [] as string[], bold: [] as string[], italic: [] as string[] };
-  const key = (p: string) => (['h1', 'bold', 'italic'] as const).find((k) => p === `38;2;${pal[k].join(';')}`);
+  void pal; // (el color ya no va en la salida: va en la ranura)
+  const key = (p: string) => (['h1', 'bold', 'italic'] as const).find((k) => p === `38;5;${MD_SLOTS[k]}`);
   let cur: 'h1' | 'bold' | 'italic' | undefined, acc = '';
   const flush = () => { if (cur && acc.trim()) res[cur].push(acc.trim()); acc = ''; };
   const re = /\x1b\[([0-9;:?<>=]*)([@-~])|\x1b[^[]|([^\x1b]+)/g;
@@ -161,7 +163,7 @@ test('real Claude Code output: title, bold and italic painted, code and explicit
       md2.feed(raw.subarray(i, i + 11), pal);
       for (const x of md2.lastInserts ?? []) {
         n++;
-        assert.match(x.s, /^\x1b\[(39|38;2;\d+;\d+;\d+)m$/, file);
+        assert.match(x.s, /^\x1b\[(39|38;5;25[345]|38;2;\d+;\d+;\d+)m$/, file); // 38;2 solo para volver al «text» de Claude
         assert.equal(raw[i + x.at - 1], 0x6d, `${file}: detrás de un SGR`);
       }
     }
@@ -174,5 +176,95 @@ test('real Claude Code output: title, bold and italic painted, code and explicit
     assert.ok(p.italic.some((x) => ['breve', 'simple', 'texto'].includes(x)), `${file}: cursiva`);
     // El código en línea (truecolor de Claude) y lo que va en gris explícito no se pintan.
     for (const runs of Object.values(p)) for (const r of runs) assert.ok(!/^nota\.txt$|^Read$|Baked|Cooked|Worked/.test(r), `${file}: ${r}`);
+  }
+});
+
+// ---------- ranuras de 256 colores y tema de xterm (repintar al cambiar de tema) ----------
+
+test('the colors go out as 256-color slots 253/254/255, never as truecolor, whatever the palette', () => {
+  const other: MdPalette = { ...PAL, h1: [10, 20, 30], bold: [40, 50, 60], italic: [70, 80, 90] };
+  for (const pal of [PAL, other, mdPalette(themeOf('githublight'))]) {
+    const out = run('\x1b[1mB\x1b[3mI\x1b[4mT\x1b[0m \x1b[3mi\x1b[23m', 0, pal);
+    assert.equal(out, `\x1b[1m${BOLD}B\x1b[3mI\x1b[4m${H1}T\x1b[0m \x1b[3m${ITAL}i\x1b[23m\x1b[39m`);
+    assert.ok(!/\x1b\[38;2;(1|2|3|10|40|70);/.test(out), 'sin truecolor de la paleta');
+  }
+  // Misma salida con dos paletas distintas: cambiar de tema no depende de reescribir lo ya escrito.
+  assert.equal(run('\x1b[1;3;4mT\x1b[24mB', 0, PAL), run('\x1b[1;3;4mT\x1b[24mB', 0, other));
+  assert.deepEqual(MD_SLOTS, { h1: 253, bold: 254, italic: 255 });
+});
+
+test('standard xterm-256 palette for 16..255 (6x6x6 cube and gray ramp)', () => {
+  const x = xterm256();
+  assert.equal(x.length, 240);
+  assert.equal(x[16 - 16], '#000000');
+  assert.equal(x[196 - 16], '#ff0000');
+  assert.equal(x[231 - 16], '#ffffff');
+  assert.equal(x[232 - 16], '#080808');
+  assert.equal(x[244 - 16], '#808080');
+  assert.equal(x[255 - 16], '#eeeeee');
+});
+
+test('xterm theme of a Claude pane: extendedAnsi = standard palette with the three slots in the theme markdown colors', () => {
+  const std = xterm256();
+  for (const e of allThemes([])) {
+    const t = mdTermTheme(e.theme);
+    const p = mdPalette(e.theme);
+    assert.equal(t.extendedAnsi.length, 240, e.id);
+    assert.equal(t.extendedAnsi[MD_SLOTS.h1 - 16], hex(p.h1), e.id);
+    assert.equal(t.extendedAnsi[MD_SLOTS.bold - 16], hex(p.bold), e.id);
+    assert.equal(t.extendedAnsi[MD_SLOTS.italic - 16], hex(p.italic), e.id);
+    // Solo cambian las tres ranuras; el resto del tema, igual.
+    for (let i = 16; i < 256; i++) if (i < 253) assert.equal(t.extendedAnsi[i - 16], std[i - 16], `${e.id} ${i}`);
+    for (const k of Object.keys(e.theme) as (keyof typeof e.theme)[]) assert.equal(t[k], e.theme[k], `${e.id}.${k}`);
+    // Mismo tema => mismo objeto (applyOptions compara temas por identidad; no recalcula).
+    assert.equal(mdTermTheme(e.theme), t, e.id);
+  }
+  // Temas distintos => ranuras distintas (lo que hace que xterm repinte lo ya escrito al cambiar de tema).
+  const a = mdTermTheme(themeOf('orchestra')).extendedAnsi, b = mdTermTheme(themeOf('githublight')).extendedAnsi;
+  assert.notDeepEqual(a.slice(253 - 16), b.slice(253 - 16));
+  // Y un tema propio (otro objeto, otros colores): también lleva sus ranuras.
+  const custom = { ...themeOf('orchestra'), magenta: '#ff00aa' };
+  assert.equal(mdTermTheme(custom).extendedAnsi[MD_SLOTS.h1 - 16], hex(mdPalette(custom).h1));
+  assert.equal(hex(mdPalette(custom).h1), '#ff00aa');
+  assert.deepEqual(mdExtendedAnsi({ h1: [1, 2, 3], bold: [4, 5, 6], italic: [7, 8, 9] }).slice(253 - 16), ['#010203', '#040506', '#070809']);
+});
+
+test('own markdown colors replace the automatic ones; null keeps the theme color', () => {
+  for (const e of allThemes([])) {
+    const auto = mdPalette(e.theme);
+    assert.deepEqual(mdPalette(e.theme, null), auto, e.id);
+    assert.deepEqual(mdPalette(e.theme, { h1: null, bold: null, italic: null }), auto, e.id);
+    const own = mdPalette(e.theme, { h1: '#ff00aa', bold: null, italic: '#00ff00' });
+    assert.deepEqual(own.h1, [255, 0, 170], e.id);
+    assert.deepEqual(own.bold, auto.bold, e.id); // los automáticos de los demás no cambian
+    assert.deepEqual(own.italic, [0, 255, 0], e.id);
+    assert.deepEqual(own.text, auto.text, e.id);
+  }
+  // Un color inválido (no debería llegar: clampSettings) cae al automático.
+  const t = themeOf('orchestra');
+  assert.deepEqual(mdPalette(t, { bold: 'nope' }).bold, mdPalette(t).bold);
+});
+
+test('xterm theme with own markdown colors: slots carry them, cache key includes them', () => {
+  const t = themeOf('orchestra');
+  const ownA = { h1: '#ff00aa', bold: '#112233', italic: null };
+  const a = mdTermTheme(t, ownA);
+  assert.equal(a.extendedAnsi[MD_SLOTS.h1 - 16], '#ff00aa');
+  assert.equal(a.extendedAnsi[MD_SLOTS.bold - 16], '#112233');
+  assert.equal(a.extendedAnsi[MD_SLOTS.italic - 16], hex(mdPalette(t).italic));
+  // Mismo tema y mismos colores (otro objeto) => mismo objeto; sin propios = el automático de siempre.
+  assert.equal(mdTermTheme(t, { ...ownA }), a);
+  assert.equal(mdTermTheme(t, { h1: null, bold: null, italic: null }), mdTermTheme(t));
+  // Otro color => otro objeto con otras ranuras (lo que hace que xterm repinte lo ya escrito).
+  const b = mdTermTheme(t, { ...ownA, bold: '#445566' });
+  assert.notEqual(b, a);
+  assert.equal(b.extendedAnsi[MD_SLOTS.bold - 16], '#445566');
+  assert.notEqual(mdTermTheme(t), a);
+  assert.notEqual(mdOwnKey(ownA), mdOwnKey({ ...ownA, bold: '#445566' }));
+  assert.equal(mdOwnKey(undefined), mdOwnKey({ h1: null, bold: null, italic: null }));
+  // Arrastrar el selector: la caché no crece sin fin y sigue devolviendo lo correcto.
+  for (let i = 0; i < 40; i++) {
+    const c = '#' + i.toString(16).padStart(2, '0') + '0000';
+    assert.equal(mdTermTheme(t, { h1: c, bold: null, italic: null }).extendedAnsi[MD_SLOTS.h1 - 16], c);
   }
 });
