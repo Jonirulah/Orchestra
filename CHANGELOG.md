@@ -5,6 +5,17 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-11-14
+
+### Added
+- **Markdown colours of your choice** (Settings → Terminal → *Markdown colours*, shown when Claude markdown colouring is on):
+  pick the colour of headings, bold and italic, or leave each one on *Automatic (from the theme)*. Includes a preview and a
+  button to go back to automatic.
+
+### Fixed
+- **Claude markdown kept the old colours after changing theme**: text already on screen now repaints with the new theme (and
+  with your own colours) right away, instead of only new output.
+
 ## [0.4.4] - 2026-11-13
 
 ### Added
