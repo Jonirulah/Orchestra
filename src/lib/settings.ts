@@ -22,6 +22,8 @@ export const APP_VERSION = '0.4.5';
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
 export type BellMode = 'flash' | 'none';
+/** Fondo del sistema detrás de la ventana translúcida (glass.rs): Mica solo en Windows 11 (si no, cae a Acrílico). */
+export type WindowEffect = 'none' | 'acrylic' | 'mica';
 /** Colores elegidos para el markdown de Claude (`#rrggbb`); null = automático (según el tema, ver mdcolor.ts). */
 export interface ClaudeMdColors { h1: string | null; bold: string | null; italic: string | null }
 export const MD_COLOR_KEYS = ['h1', 'bold', 'italic'] as const;
@@ -33,6 +35,10 @@ export interface Settings {
   confirmClose: boolean;
   /** Color de acento (#rrggbb). */
   accent: string;
+  /** Opacidad del fondo de la ventana en % (30..100); 100 = opaca (como siempre). El texto nunca se transparenta. */
+  windowOpacity: number;
+  /** Efecto detrás de la ventana cuando no es opaca. */
+  windowEffect: WindowEffect;
   /** Idioma de la interfaz: 'en', 'es' o 'system' (el del sistema). */
   language: LanguageSetting;
   /** Barra de estado inferior con métricas del equipo (ver statusbar.ts). */
@@ -194,6 +200,8 @@ export const DEFAULTS: Settings = {
   closeToTray: true,
   confirmClose: true,
   accent: '#f5b942',
+  windowOpacity: 100,
+  windowEffect: 'none',
   language: 'en',
   statusBar: true,
   statusBarItems: [...DEFAULT_ITEMS],
@@ -285,12 +293,14 @@ export const SCROLLBACK_CHOICES = [1000, 5000, 10000, 25000, 50000] as const;
 export const CURSOR_STYLES: readonly CursorStyle[] = ['bar', 'block', 'underline'];
 export const RIGHT_CLICKS: readonly RightClick[] = ['smart', 'paste', 'none'];
 export const BELL_MODES: readonly BellMode[] = ['flash', 'none'];
+export const WINDOW_EFFECTS: readonly WindowEffect[] = ['none', 'acrylic', 'mica'];
 export const POLICY_IDS: readonly AccountPolicy[] = ['manual', 'round-robin', 'reset-soonest', 'most-free'];
 
 export const LIMITS = {
   fontSize: [9, 24],
   lineHeight: [1.0, 1.6],
   letterSpacing: [-2, 8],
+  windowOpacity: [30, 100],
   scanIntervalSec: [1, 10],
   soundVolume: [0, 100],
   cacheWarnMin: [1, 30],
@@ -318,7 +328,7 @@ export const LIMITS = {
 
 /** Claves que reinicia «Reset section» en cada sección con ajustes. */
 export const SECTION_KEYS = {
-  general: ['closeToTray', 'confirmClose', 'accent', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
+  general: ['closeToTray', 'confirmClose', 'accent', 'windowOpacity', 'windowEffect', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
   terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'claudeThemeSet', 'claudeMarkdownColor', 'claudeMdColors', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
   agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'usageRenew', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
@@ -377,6 +387,8 @@ export function clampSettings(raw: unknown): Settings {
     closeToTray: bool(r.closeToTray, D.closeToTray),
     confirmClose: bool(r.confirmClose, D.confirmClose),
     accent: isHexColor(r.accent) ? r.accent.toLowerCase() : D.accent,
+    windowOpacity: num(r.windowOpacity, LIMITS.windowOpacity, D.windowOpacity),
+    windowEffect: oneOf(r.windowEffect, WINDOW_EFFECTS, D.windowEffect),
     language: oneOf(r.language, LANGUAGE_SETTINGS, D.language),
     statusBar: bool(r.statusBar, D.statusBar),
     statusBarItems: cleanItems(r.statusBarItems),

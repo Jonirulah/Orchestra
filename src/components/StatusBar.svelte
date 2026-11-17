@@ -301,6 +301,7 @@
     background: var(--panel); border-top: 1px solid var(--border);
     font-size: 11.5px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; user-select: none;
   }
+  :global(html.glass) .sb:not(.preview) { background: var(--panel-g); }
   .sb.preview { grid-column: auto; border: 1px solid var(--border); border-radius: var(--radius); }
   .sb:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
   .it { display: inline-flex; align-items: center; gap: 5px; flex: none; overflow: hidden; text-overflow: ellipsis; }

@@ -479,6 +479,7 @@
 <style>
   /* min-height: 0 en el contenedor y en la zona con scroll: sin él, un hijo flex no se encoge por debajo de su contenido y la lista
      se corta en vez de hacer scroll cuando hay muchos agentes o subagentes. */
+  :global(html.glass) .side { background: var(--panel-g); }
   .side { background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; }
   .brand { display: flex; align-items: center; gap: 9px; padding: 11px 12px 8px; font-size: 14px; letter-spacing: 0.02em; }
   .brandlogo { display: grid; }

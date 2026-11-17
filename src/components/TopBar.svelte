@@ -167,6 +167,7 @@
 
 <style>
   .save-ws { width: min(440px, 92vw); }
+  :global(html.glass) .top { background: var(--panel-g); }
   .top { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
   .grow { flex: 1; }
   .tabs { display: flex; align-items: center; gap: 3px; min-width: 0; overflow-x: auto; }

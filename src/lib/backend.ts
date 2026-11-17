@@ -4,6 +4,7 @@ import type { UsageResult } from './usageQuery.ts';
 import { demoHistory, type HistPoint } from './history.ts';
 import type { InstalledFont } from './fontlist.ts';
 import type { ClaudeThemeFile } from './claudetheme.ts';
+import type { WindowEffect } from './settings.ts';
 import { demoAccounts, demoMcpBase, demoMcpDef, demoQuery, DEMO_CODEX_DEFAULT } from './demodata.ts';
 import { demoScanReport, demoSessionReport, demoAdvice, demoReport } from './consumodemo.ts';
 
@@ -191,6 +192,11 @@ export function openUrl(url: string): void {
 }
 export function setCloseToTray(enabled: boolean): void {
   if (inTauri) void invoke('set_close_to_tray', { enabled });
+}
+/** Cristal de la ventana (glass.rs). Devuelve el efecto que ha quedado (Mica cae a Acrílico fuera de Windows 11). */
+export async function setWindowGlass(glass: boolean, effect: WindowEffect): Promise<WindowEffect> {
+  if (!inTauri) return glass ? effect : 'none'; // demo del navegador: no hay ventana que tocar
+  try { return await invoke<WindowEffect>('set_window_glass', { glass, effect }); } catch { return 'none'; }
 }
 /** Textos del menú de la bandeja del sistema (los del idioma elegido). */
 export function setTrayLabels(show: string, quit: string): void {

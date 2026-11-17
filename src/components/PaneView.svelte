@@ -237,6 +237,12 @@
   .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; margin: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; position: relative; }
   .pane.focused { border-color: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
   .pane.bell .head { background: var(--accent-soft); }
+  /* Cristal: el panel no pinta (su cabecera y su cuerpo sí, una vez cada uno) y su margen lo cubre una sombra
+     sin desenfoque del color de fondo; esquinas rectas para que esas sombras encajen sin huecos entre paneles. */
+  :global(html.glass) .pane { background: transparent; border-radius: 0; box-shadow: 0 0 0 3px var(--bg-g); }
+  :global(html.glass) .pane.focused { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 0 3px var(--bg-g); }
+  :global(html.glass) .head { background: var(--panel-g); }
+  :global(html.glass) .body { background: var(--term-bg-g); }
   .head { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 5px 0 9px; background: var(--panel); border-bottom: 1px solid var(--border); cursor: grab; flex: none; }
   .head:active { cursor: grabbing; }
   .state { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }

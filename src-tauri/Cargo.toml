@@ -43,4 +43,6 @@ codegen-units = 4
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
 windows-core = "0.62"
-windows = { version = "0.62", features = ["Win32_System_Com", "Win32_Graphics_DirectWrite"] }
+windows = { version = "0.62", features = ["Win32_System_Com", "Win32_Graphics_DirectWrite", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi"] }
+# Transparencia de la ventana: Acrílico y Mica (glass.rs). Ya venía en el árbol por tauri.
+window-vibrancy = "0.8"

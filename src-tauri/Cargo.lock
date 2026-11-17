@@ -2684,6 +2684,7 @@ dependencies = [
  "tauri-plugin-updater",
  "ureq",
  "webview2-com",
+ "window-vibrancy",
  "windows 0.62.2",
  "windows-core 0.62.2",
 ]

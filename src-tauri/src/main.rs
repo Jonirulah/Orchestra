@@ -9,6 +9,7 @@ mod commands;
 mod consumo;
 mod fonts;
 mod git;
+mod glass;
 mod history;
 mod hostkey;
 mod idle;
@@ -109,6 +110,7 @@ fn main() {
             git::git_info,
             git::git_available,
             commands::set_close_to_tray,
+            glass::set_window_glass,
             set_tray_labels,
             vault::secret_set,
             vault::secret_exists,

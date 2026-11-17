@@ -22,7 +22,8 @@ import type { ProviderEntry } from './providers.ts';
 import { clampIntervalMin, queryTargets, toEntry } from './usageQuery.ts';
 import type { QueryEntry, UsageResult } from './usageQuery.ts';
 import { DEFAULTS, TERMINAL_KEYS, clampSettings, fontStack, hexAlpha, resetSection } from './settings.ts';
-import type { SectionId, Settings } from './settings.ts';
+import type { SectionId, Settings, WindowEffect } from './settings.ts';
+import { glassAlpha, windowLook } from './glass.ts';
 import { cleanOverride } from './statusbar.ts';
 import { playSound } from './sounds.ts';
 import type { ItemId } from './statusbar.ts';
@@ -104,6 +105,10 @@ class AppState {
   savedWorkspaces = $state<SavedWorkspace[]>([]);
   activeId = $state('');
   settings = $state<Settings>({ ...DEFAULTS });
+  /** Efecto que ha quedado puesto en la ventana (Mica cae a Acrílico fuera de Windows 11); null = aún no se ha pedido. */
+  windowEffectApplied = $state<WindowEffect | null>(null);
+  /** Último aspecto pedido a la ventana (para no repetir la llamada mientras se arrastra el deslizador). */
+  private lookSent = '';
   live = $state<Record<string, LiveInfo>>({});
   /** Insignia de latencia y reconexión de los paneles SSH (la lógica está en sshconn.ts). */
   sshState = $state<ConnState>({ latency: {}, reconnecting: {}, flash: {}, down: {}, gaveUp: {} });
@@ -1457,7 +1462,7 @@ class AppState {
       fontFamily: fontStack(s.fontFamily), fontSize: s.fontSize, lineHeight: s.lineHeight, letterSpacing: s.letterSpacing,
       cursorStyle: s.cursorStyle, cursorBlink: s.cursorBlink, scrollback: s.scrollback,
       theme: resolveTheme(s.theme, this.customThemes), copyOnSelect: s.copyOnSelect, rightClick: s.rightClick, bell: s.bell,
-      mdColors: { ...s.claudeMdColors },
+      mdColors: { ...s.claudeMdColors }, glass: windowLook(s.windowOpacity, s.windowEffect).glass,
     };
   }
 
@@ -1467,6 +1472,21 @@ class AppState {
     st.setProperty('--accent', this.settings.accent);
     st.setProperty('--accent-soft', hexAlpha(this.settings.accent, 0.14));
     st.setProperty('--term-bg', resolveTheme(this.settings.theme, this.customThemes).background);
+    this.applyWindowLook();
+  }
+
+  /** Opacidad y efecto de la ventana (glass.ts / glass.rs). A 100 % no hay clase `glass` ni llamada: como siempre. */
+  applyWindowLook(): void {
+    const look = windowLook(this.settings.windowOpacity, this.settings.windowEffect);
+    const root = document.documentElement;
+    root.style.setProperty('--win-a', String(look.glass ? glassAlpha(this.settings.windowOpacity) : 1));
+    root.classList.toggle('glass', look.glass);
+    const key = `${look.glass}|${look.effect}`;
+    if (key === this.lookSent || (!look.glass && !this.lookSent)) { this.lookSent = key; return; }
+    this.lookSent = key;
+    void be.setWindowGlass(look.glass, look.effect).then((applied) => {
+      if (this.lookSent === key) this.windowEffectApplied = applied;
+    });
   }
 
   /** Idioma de la interfaz: fija el diccionario, `<html lang>` y los textos de la bandeja. App.svelte remonta todo al cambiar `settings.language`. */
@@ -1481,6 +1501,11 @@ class AppState {
   private applyEffects(keys: readonly (keyof Settings)[]): void {
     if (keys.some((k) => TERMINAL_KEYS.includes(k))) T.applyOptions(this.termOptions());
     if (keys.includes('accent') || keys.includes('theme')) this.applyAppearance();
+    if (keys.includes('windowOpacity') || keys.includes('windowEffect')) {
+      this.applyWindowLook();
+      // Cruzar el 100 % cambia el fondo de los xterm (allowTransparency); moverse por debajo, no.
+      if (this.termOptions().glass !== T.currentGlass()) T.applyOptions(this.termOptions());
+    }
     if (keys.includes('language')) this.applyLanguage();
     if (keys.includes('closeToTray')) be.setCloseToTray(this.settings.closeToTray);
     if (keys.includes('scanIntervalSec')) this.armScan();

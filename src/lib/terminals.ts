@@ -12,6 +12,7 @@ import * as be from './backend.ts';
 import type { Pane } from './model.ts';
 import { DEFAULTS, fontStack } from './settings.ts';
 import { themeOf } from './themes.ts';
+import { clearBackground } from './glass.ts';
 import type { TermTheme } from './themes.ts';
 import { parseOsc7, parseOsc9, withCwdTracking } from './gitinfo.ts';
 import { copiedCount, ctrlCAction, parseOsc52, rightClickAction, shouldHintShift } from './termcopy.ts';
@@ -86,6 +87,8 @@ export interface TermOptions {
   bell: 'flash' | 'none';
   /** Colores propios del markdown de Claude (null = automático según el tema). */
   mdColors?: ClaudeMdColors;
+  /** Ventana translúcida (glass.ts): fondo del xterm sin pintar y allowTransparency. */
+  glass?: boolean;
 }
 
 interface Entry {
@@ -106,8 +109,10 @@ interface Entry {
 const entries = new Map<string, Entry>();
 
 /** Tema de xterm de un panel: con el reescritor del markdown activo lleva sus ranuras de 256 colores (ver mdcolor.ts). */
-function themeFor(e: Pick<Entry, 'md'>, theme: TermTheme = opts.theme, own: ClaudeMdColors | undefined = opts.mdColors): ITheme {
-  return e.md ? { ...mdTermTheme(theme, own) } : { ...theme };
+function themeFor(e: Pick<Entry, 'md'>, theme: TermTheme = opts.theme, own: ClaudeMdColors | undefined = opts.mdColors, glass = !!opts.glass): ITheme {
+  const t: ITheme = e.md ? { ...mdTermTheme(theme, own) } : { ...theme };
+  if (glass) t.background = clearBackground(theme.background); // lo pinta `.body` del panel, con el alfa de la ventana
+  return t;
 }
 let hooks: TermHooks;
 const MAX_WEBGL = 12; // WebView2/Chromium admite ~16 contextos WebGL a la vez
@@ -175,7 +180,8 @@ function create(id: string): Entry {
     cursorStyle: opts.cursorStyle,
     scrollback: opts.scrollback,
     allowProposedApi: true,
-    theme: { ...opts.theme },
+    allowTransparency: !!opts.glass,
+    theme: themeFor({}),
     macOptionIsMeta: true,
     rightClickSelectsWord: false,
   });
@@ -436,6 +442,9 @@ export function dispose(id: string): void {
   be.ptyClose(id);
 }
 
+/** ¿Están los xterm con fondo de cristal? */
+export function currentGlass(): boolean { return !!opts.glass; }
+
 export function setFontSize(size: number): void {
   applyOptions({ ...opts, fontSize: size });
 }
@@ -444,6 +453,7 @@ export function setFontSize(size: number): void {
 export function applyOptions(o: TermOptions): void {
   const themeChanged = o.theme !== opts.theme; // themeOf() devuelve siempre el mismo objeto por tema
   const mdChanged = mdOwnKey(o.mdColors) !== mdOwnKey(opts.mdColors); // colores propios del markdown
+  const glassChanged = !!o.glass !== !!opts.glass;
   opts = o;
   for (const e of entries.values()) {
     const t = e.term.options;
@@ -454,8 +464,9 @@ export function applyOptions(o: TermOptions): void {
     if (t.cursorStyle !== o.cursorStyle) t.cursorStyle = o.cursorStyle;
     if (t.cursorBlink !== o.cursorBlink) t.cursorBlink = o.cursorBlink;
     if (t.scrollback !== o.scrollback) t.scrollback = o.scrollback;
+    if (glassChanged) t.allowTransparency = !!o.glass;
     // Las ranuras del markdown también (tema o colores propios): xterm repinta lo ya escrito.
-    if (themeChanged || (mdChanged && e.md)) t.theme = themeFor(e, o.theme, o.mdColors);
+    if (themeChanged || glassChanged || (mdChanged && e.md)) t.theme = themeFor(e, o.theme, o.mdColors, !!o.glass);
     fitNow(e.id);
   }
 }

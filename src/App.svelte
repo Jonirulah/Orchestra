@@ -86,6 +86,7 @@
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
   .area { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .rz { cursor: col-resize; background: transparent; margin-left: -3px; }
+  :global(html.glass) .rz:not(:hover) { background: var(--bg-g); }
   .rz:hover { background: color-mix(in srgb, var(--accent) 40%, transparent); }
   .boot { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>

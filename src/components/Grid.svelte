@@ -134,6 +134,8 @@
   .grid { position: relative; display: grid; flex: 1; min-height: 0; min-width: 0; padding: 0; }
   .grid.dragging { user-select: none; }
   .empty { margin: 3px; border: 1px dashed var(--border-strong); border-radius: var(--radius); display: grid; place-items: center; align-content: center; min-width: 0; min-height: 0; }
+  :global(html.glass) .empty:not(:hover) { background: var(--bg-g); border-radius: 0; box-shadow: 0 0 0 3px var(--bg-g); }
+  :global(html.glass) .empty:hover { background: color-mix(in srgb, var(--accent) 14%, var(--bg-g)); border-radius: 0; box-shadow: 0 0 0 3px var(--bg-g); }
   .empty:hover { border-color: var(--accent); background: var(--accent-soft); }
   .add { display: grid; justify-items: center; gap: 4px; color: var(--muted); padding: 20px; }
   .add:hover { color: var(--accent); }

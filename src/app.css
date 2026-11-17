@@ -17,6 +17,11 @@
   --radius: 7px;
   --ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   color-scheme: dark;
+  /* Transparencia de la ventana (glass.ts): alfa de los fondos; 1 = opaca. Con alfa 1 estos colores son los de siempre. */
+  --win-a: 1;
+  --bg-g: color-mix(in srgb, var(--bg) calc(var(--win-a) * 100%), transparent);
+  --panel-g: color-mix(in srgb, var(--panel) calc(var(--win-a) * 100%), transparent);
+  --term-bg-g: color-mix(in srgb, var(--term-bg, var(--bg)) calc(var(--win-a) * 100%), transparent);
 }
 
 * { box-sizing: border-box; }
@@ -28,6 +33,10 @@ body {
   overflow: hidden;
   user-select: none;
 }
+/* Ventana translúcida: el body no pinta; cada zona pinta su fondo una sola vez con --*-g (ver glass.ts). */
+html.glass, html.glass body { background: transparent; }
+/* xterm.css pinta el viewport de negro (#000) debajo del lienzo: con cristal se vería opaco. */
+html.glass .xterm .xterm-viewport { background-color: transparent; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 input, select, textarea {
