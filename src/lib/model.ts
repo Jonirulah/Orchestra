@@ -2,6 +2,8 @@
 // Solo sintaxis TS borrable: sin enums ni namespaces.
 import { t } from './i18n.ts';
 import type { ItemId } from './statusbar.ts';
+import { cleanEnvRows } from './agentenv.ts';
+import type { EnvRow } from './agentenv.ts';
 
 export type PaneKind = 'shell' | 'ssh' | 'agent';
 
@@ -523,6 +525,8 @@ export interface Account {
   color: string;
   /** Ausente en los estados guardados antiguos = 'claude' (ver `normalizeAccounts`). */
   provider: Provider;
+  /** Variables de entorno propias de los terminales de esta cuenta; ganan a las globales (ver agentenv.ts). */
+  env?: EnvRow[];
 }
 
 /** Nombre del producto (no se traduce). */
@@ -542,7 +546,10 @@ export function normalizeAccounts(raw: unknown): Account[] {
     if (!a || typeof a !== 'object') continue;
     const r = a as Record<string, unknown>;
     if (typeof r.id !== 'string' || typeof r.dir !== 'string') continue;
-    out.push({ ...(r as unknown as Account), provider: providerOf(r) });
+    const acc: Account = { ...(r as unknown as Account), provider: providerOf(r) };
+    const env = cleanEnvRows(r.env);
+    if (env.length) acc.env = env; else delete acc.env;
+    out.push(acc);
   }
   return out;
 }

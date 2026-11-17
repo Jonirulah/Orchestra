@@ -5,6 +5,27 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+### Added
+- **Agent environment variables** (Settings → Agents): a list of `NAME = value` pairs added to every agent terminal Orchestra
+  starts (Claude, Codex, opencode and MCP sign-in terminals, also restored ones). Each account can have its own list (Settings →
+  Accounts → *Environment variables*), which wins over the global one when a name is in both. Names are checked (letters, digits
+  and `_`, not starting with a digit, no repeats) and the variables Orchestra sets itself to keep accounts apart
+  (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `ORCHESTRA_ACCOUNT`) cannot be overridden: such a row
+  says so and is not applied. The variables are worked out each time a terminal starts or restarts, so removing one also
+  removes it from restored panes. They are included in *Export everything*, except names that look secret (`…TOKEN`, `…KEY`,
+  `…SECRET`, `…PASSWORD`).
+- **Claude Code experimental code mode** switch (Settings → Agents): adds or removes `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1` in
+  that list. Applies to new or restarted terminals; open ones do not change.
+- **Window transparency** (Settings → General): *Window opacity* from 30 to 100 % (100, the default, looks as before) and a
+  *Background effect* of None, Acrylic or Mica. It applies live, is saved and is included in export/import; text, menus and
+  dialogs stay opaque.
+
+### Fixed
+- **Subagent list was incomplete**: only the last 1.5 MB of a transcript was read, so in long sessions subagents started earlier
+  were missing, and a subagent waiting on a long command was marked finished after 25 s and disappeared. Orchestra now reads
+  Claude Code's `subagents/agent-<id>.meta.json` files for the type, description and whether it finished; a subagent is active
+  while it has not finished and was written to in the last hour.
+
 ## [0.4.5] - 2026-11-14
 
 ### Added

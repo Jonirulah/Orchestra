@@ -44,6 +44,8 @@ export interface TermHooks {
   onShiftHint?(id: string): void;
   /** Colores del markdown de Claude para la salida de ese panel, o null (no es de Claude o el ajuste está apagado). */
   mdColors?(id: string): MdPalette | null;
+  /** Entorno con el que se lanza el proceso: el del spec más las variables propias de los agentes, con los ajustes de AHORA (agentenv.ts). */
+  spawnEnv?(pane: Pane): Record<string, string> | undefined;
 }
 
 export type CopyVia = 'key' | 'menu' | 'select' | 'osc52';
@@ -326,6 +328,11 @@ function registerCwdOsc(term: Terminal, id: string): void {
   term.parser.registerOscHandler(7, (data) => emit(parseOsc7(data)));
 }
 
+/** Entorno real de lanzamiento: se calcula en cada arranque o reinicio, nunca se guarda en el spec. */
+function envOf(pane: Pane): Record<string, string> | undefined {
+  return hooks.spawnEnv ? hooks.spawnEnv(pane) : pane.spec.env;
+}
+
 /** Lanza el proceso con el tamaño ya ajustado al panel. */
 export async function launch(pane: Pane): Promise<void> {
   const entry = entries.get(pane.id);
@@ -334,7 +341,7 @@ export async function launch(pane: Pane): Promise<void> {
     hooks.onOutput(pane.id, false);
     await be.ptySpawn({
       id: pane.id, program: pane.spec.program, args: spawnArgs(pane),
-      cwd: pane.spec.cwd, env: pane.spec.env,
+      cwd: pane.spec.cwd, env: envOf(pane),
       cols: entry.term.cols, rows: entry.term.rows,
     });
     await attach(entry);
@@ -374,7 +381,7 @@ export async function restart(pane: Pane, banner?: string): Promise<void> {
   hooks.onOutput(pane.id, false);
   await be.ptySpawn({
     id: pane.id, program: pane.spec.program, args: spawnArgs(pane), cwd: pane.spec.cwd,
-    env: pane.spec.env, cols: e.term.cols, rows: e.term.rows,
+    env: envOf(pane), cols: e.term.cols, rows: e.term.rows,
   });
   await attach(e);
   hooks.onState(pane.id, 'running');

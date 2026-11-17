@@ -15,6 +15,8 @@ import { DEFAULT_ITEMS, DEFAULT_INTERVAL, DEFAULT_RM_INTERVAL, INTERVAL_LIMITS, 
 import type { ItemId } from './statusbar.ts';
 import { cleanSoundId } from './sounds.ts';
 import type { SoundId } from './sounds.ts';
+import { cleanEnvRows } from './agentenv.ts';
+import type { EnvRow } from './agentenv.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
 export const APP_VERSION = '0.4.5';
@@ -82,6 +84,8 @@ export interface Settings {
   accountPolicy: AccountPolicy;
   /** Carpeta de trabajo de los agentes nuevos (vacío = carpeta de usuario). */
   agentCwd: string;
+  /** Variables de entorno propias de TODO terminal de agente (Claude, Codex, opencode, inicio de sesión MCP); ver agentenv.ts. */
+  agentEnv: EnvRow[];
   scanIntervalSec: number;
   notifyPermission: boolean;
   notifyDone: boolean;
@@ -227,6 +231,7 @@ export const DEFAULTS: Settings = {
   theme: 'orchestra',
   accountPolicy: 'manual',
   agentCwd: '',
+  agentEnv: [],
   scanIntervalSec: 2,
   notifyPermission: true,
   notifyDone: true,
@@ -330,7 +335,7 @@ export const LIMITS = {
 export const SECTION_KEYS = {
   general: ['closeToTray', 'confirmClose', 'accent', 'windowOpacity', 'windowEffect', 'language', 'statusBar', 'statusBarItems', 'statusBarInterval', 'statusBarAdapt', 'remoteMetricsInterval', 'autoUpdate'],
   terminal: ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'claudeThemes', 'claudeThemeSet', 'claudeMarkdownColor', 'claudeMdColors', 'cursorStyle', 'cursorBlink', 'scrollback', 'copyOnSelect', 'pasteImages', 'rightClick', 'bell', 'theme', 'gitChip', 'gitCounts', 'gitIntervalSec', 'gitTrackFolder'],
-  agents: ['accountPolicy', 'agentCwd', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'usageRenew', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
+  agents: ['accountPolicy', 'agentCwd', 'agentEnv', 'scanIntervalSec', 'notifyPermission', 'notifyDone', 'soundAttention', 'soundDone', 'soundVolume', 'restoreClaudeSessions', 'cacheWarnMin', 'agentCard', 'agentCardDelayMs', 'captureUsage', 'notifyQuota', 'usageQuery', 'usageQueryMin', 'usageRenew', 'autoCompact', 'autoCompactCtxK', 'autoCompactAfterMin', 'autoCompactUserIdleMin'],
   accounts: ['accountsFilter', 'accountsSort', 'accountsGroup'],
   sshkeys: [
     'sshHostKeyPolicy', 'sftpDownloadDir', 'sftpAskDownload', 'portsDetect', 'portsAutoOpen',
@@ -415,6 +420,7 @@ export function clampSettings(raw: unknown): Settings {
     theme: isCustomThemeId(r.theme) ? r.theme : oneOf(r.theme, THEME_IDS as readonly string[], D.theme),
     accountPolicy: oneOf(r.accountPolicy, POLICY_IDS, D.accountPolicy),
     agentCwd: typeof r.agentCwd === 'string' ? r.agentCwd.slice(0, 500) : D.agentCwd,
+    agentEnv: cleanEnvRows(r.agentEnv),
     scanIntervalSec: num(r.scanIntervalSec, LIMITS.scanIntervalSec, D.scanIntervalSec),
     notifyPermission: bool(r.notifyPermission, D.notifyPermission),
     notifyDone: bool(r.notifyDone, D.notifyDone),

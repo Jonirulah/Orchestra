@@ -5,6 +5,8 @@
   import { t, tk } from '../lib/i18n.ts';
   import Toggle from './Toggle.svelte';
   import Slider from './Slider.svelte';
+  import EnvList from './EnvList.svelte';
+  import { CODE_MODE_ENV, codeModeOn } from '../lib/agentenv.ts';
   import { SOUND_IDS, playSound } from '../lib/sounds.ts';
   import type { SoundId } from '../lib/sounds.ts';
 
@@ -59,6 +61,22 @@
   <div class="ctl col">
     <input placeholder={t('settings.agents.cwdPlaceholder')} value={s.agentCwd} oninput={(e) => app.setting('agentCwd', e.currentTarget.value)} spellcheck="false" />
   </div>
+</div>
+
+<div class="s-row">
+  <div class="lbl">
+    <b>{t('settings.agents.codeModeLabel')}</b>
+    <small><code>{CODE_MODE_ENV}=1</code> · {t('settings.agents.codeModeHint')}</small>
+  </div>
+  <div class="ctl"><Toggle value={codeModeOn(s.agentEnv)} label={t('settings.agents.codeModeLabel')} onchange={(v) => app.setCodeMode(v)} /></div>
+</div>
+
+<div class="s-row stack">
+  <div class="lbl">
+    <b>{t('settings.agents.envLabel')}</b>
+    <small>{t('settings.agents.envHint')}</small>
+  </div>
+  <EnvList rows={s.agentEnv} label={t('settings.agents.envLabel')} onchange={(rows) => app.setting('agentEnv', rows)} />
 </div>
 
 <div class="s-row">

@@ -31,4 +31,6 @@ export default {
   'settings.accounts.sortFree': 'Most free',
   'settings.accounts.sortReset': 'Resets soonest',
   'settings.accounts.groupLabel': 'Group by provider',
+  'settings.accounts.envLabel': 'Environment variables ({n})',
+  'settings.accounts.envHint': 'Only for this account’s terminals. If a name is also in Settings → Agents, this value wins. Applies to new or restarted terminals.',
 } as const;

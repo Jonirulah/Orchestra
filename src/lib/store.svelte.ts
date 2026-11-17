@@ -35,6 +35,8 @@ import { cleanDismissed } from './consumo.ts';
 import { FOLLOW_SLUG, claudeThemeFiles } from './claudetheme.ts';
 import { isClaudePane, mdPalette } from './mdcolor.ts';
 import type { MdPalette } from './mdcolor.ts';
+import { cleanEnvRows, setCodeMode, spawnEnv } from './agentenv.ts';
+import type { EnvRow } from './agentenv.ts';
 import { SshConn } from './sshconn.ts';
 import type { ConnState } from './sshconn.ts';
 import { dotOf, separatorText, sshLook, veiled, worstDot } from './sshdrop.ts';
@@ -285,6 +287,7 @@ class AppState {
         onCwd: (id, cwd) => { if (this.live[id]?.cwd !== cwd) this.setLive(id, { cwd }); },
         trackFolder: () => this.settings.gitTrackFolder,
         mdColors: (id) => this.mdColorsFor(id),
+        spawnEnv: (pane) => spawnEnv(pane, this.settings.agentEnv, this.accounts),
         onInput: (id, data) => this.drafts.set(id, nextDraft(this.drafts.get(id), data, Date.now())),
       },
       this.termOptions(),
@@ -952,6 +955,20 @@ class AppState {
   renameAccount(id: string, name: string): void {
     const a = this.accountById(id);
     if (a && name.trim()) { a.name = name.trim(); this.persist(); }
+  }
+
+  /** Variables de entorno propias de una cuenta (se aplican a sus terminales nuevos o reiniciados). */
+  setAccountEnv(id: string, rows: EnvRow[]): void {
+    const a = this.accountById(id);
+    if (!a) return;
+    const env = cleanEnvRows(rows);
+    if (env.length) a.env = env; else delete a.env;
+    this.persist();
+  }
+
+  /** Atajo de Ajustes: añade o quita CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 de la lista global. */
+  setCodeMode(on: boolean): void {
+    this.setting('agentEnv', setCodeMode($state.snapshot(this.settings.agentEnv) as EnvRow[], on));
   }
 
   /** Quita la cuenta de la lista de Orchestra. No toca la carpeta; no se vuelve a añadir sola al escanear. */

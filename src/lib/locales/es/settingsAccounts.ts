@@ -31,4 +31,6 @@ export default {
   'settings.accounts.sortFree': 'Más libre',
   'settings.accounts.sortReset': 'Se renueva antes',
   'settings.accounts.groupLabel': 'Agrupar por proveedor',
+  'settings.accounts.envLabel': 'Variables de entorno ({n})',
+  'settings.accounts.envHint': 'Solo para los terminales de esta cuenta. Si un nombre también está en Ajustes → Agentes, gana este valor. Se aplica a los terminales nuevos o reiniciados.',
 } as const;

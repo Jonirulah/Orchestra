@@ -7,6 +7,7 @@
 import { ACCOUNT_COLORS, normalizeAccounts, normalizeHost, providerOf, restorableSpec, uid } from './model.ts';
 import type { Account, AgentAccess, Host, Pane, PaneKind, PaneSpec, Workspace } from './model.ts';
 import { clampSettings } from './settings.ts';
+import { exportableEnv } from './agentenv.ts';
 import { cleanOverride } from './statusbar.ts';
 import type { Settings } from './settings.ts';
 import { DEFAULT_THEME, MAX_CUSTOM_THEMES, hasTheme } from './themes.ts';
@@ -150,7 +151,7 @@ function scrub<T>(v: T): T {
 // Si alguien añade un campo a Host o Account y no lo apunta aquí, svelte-check lo dice (la copia lo perdería en silencio).
 const HOST_KEYS = ['id', 'name', 'group', 'tags', 'color', 'host', 'user', 'port', 'authMethod', 'identityFile', 'hasPassword', 'hasPassphrase',
   'hostKeyPolicy', 'proxyJump', 'command', 'tmux', 'remoteMetrics', 'forwards', 'notes', 'agentAccess'] as const satisfies readonly (keyof Host)[];
-const ACCOUNT_KEYS = ['id', 'name', 'dir', 'isDefault', 'color', 'provider'] as const satisfies readonly (keyof Account)[];
+const ACCOUNT_KEYS = ['id', 'name', 'dir', 'isDefault', 'color', 'provider', 'env'] as const satisfies readonly (keyof Account)[];
 const _hostKeysComplete: Exclude<keyof Host, (typeof HOST_KEYS)[number]> extends never ? true : never = true;
 const _accountKeysComplete: Exclude<keyof Account, (typeof ACCOUNT_KEYS)[number]> extends never ? true : never = true;
 void _hostKeysComplete; void _accountKeysComplete;
@@ -329,6 +330,7 @@ function sanitizeAccounts(raw: unknown): Account[] {
       isDefault: r.isDefault === true,
       color: isHex(r.color) ? r.color : ACCOUNT_COLORS[out.length % ACCOUNT_COLORS.length],
       provider: providerOf(r),
+      ...(a.env?.length ? { env: a.env } : {}),
     });
   }
   return out;
@@ -344,6 +346,7 @@ export function backupFileName(now: Date = new Date()): string {
 export function buildBackup(state: BackupState, meta: { appVersion: string; now?: Date }): BackupFile {
   const settings = { ...clone(state.settings) } as Partial<Settings>;
   delete settings.usageQuery; // lee un token: se enciende solo desde su diálogo
+  settings.agentEnv = exportableEnv(state.settings.agentEnv); // variables propias: sin las de nombre secreto
   const hosts = state.hosts.map((h) => {
     const o: Record<string, unknown> = {};
     for (const k of HOST_KEYS) if (k !== 'hasPassword' && k !== 'hasPassphrase' && h[k] !== undefined) o[k] = clone(h[k]);
@@ -351,7 +354,9 @@ export function buildBackup(state: BackupState, meta: { appVersion: string; now?
   });
   const accounts = state.accounts.map((a) => {
     const o: Record<string, unknown> = {};
-    for (const k of ACCOUNT_KEYS) if (a[k] !== undefined) o[k] = a[k];
+    for (const k of ACCOUNT_KEYS) if (k !== 'env' && a[k] !== undefined) o[k] = a[k];
+    const env = exportableEnv(a.env); // sin las de nombre secreto (agentenv.ts)
+    if (env.length) o.env = env;
     return o as unknown as Account;
   });
   const workspaces: Workspace[] = state.workspaces.map((w) => {

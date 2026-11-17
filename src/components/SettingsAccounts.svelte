@@ -16,6 +16,7 @@
   import type { AccountsSort } from '../lib/accountview.ts';
   import Seg from './Seg.svelte';
   import Toggle from './Toggle.svelte';
+  import EnvList from './EnvList.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -153,6 +154,11 @@
     </div>
     <div class="path"><span>{t('settings.accounts.folderLabel')}</span><input readonly value={a.dir} aria-label={t('settings.accounts.folderAria')} /></div>
     {#if prov === 'opencode' && a.isDefault}<p class="hint">{t('settings.accounts.sharedNote')}</p>{/if}
+    <details class="acc-env" open={!!a.env?.length}>
+      <summary>{t('settings.accounts.envLabel', { n: a.env?.length ?? 0 })}</summary>
+      <p class="hint">{t('settings.accounts.envHint')}</p>
+      <EnvList rows={a.env ?? []} label={t('settings.accounts.envLabel', { n: a.env?.length ?? 0 })} onchange={(rows) => app.setAccountEnv(a.id, rows)} />
+    </details>
     <div class="acts">
       {#if prov === 'claude'}
         <button class="btn" onclick={() => openClaude(a.id)}><Icon name="bot" size={13} /> {pr?.loggedIn ? t('settings.accounts.openClaude') : t('settings.accounts.openLogin')}</button>
@@ -185,6 +191,9 @@
 {#if hasOther}<p class="hint">{t('settings.accounts.claudeOnlyHint')}</p>{/if}
 
 <style>
+  .acc-env summary { cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; }
+  .acc-env[open] summary { margin-bottom: 4px; }
+  .acc-env .hint { margin: 0 0 6px; }
   .acc-grp { margin: 10px 0 2px; color: var(--faint); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
   .tag { font-size: 10.5px; color: var(--muted); border: 1px solid var(--border-strong); border-radius: 5px; padding: 0 6px; flex: none; }
   .status.warn { color: var(--warn); }
