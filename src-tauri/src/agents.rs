@@ -24,6 +24,9 @@ const TAIL_BYTES: u64 = 1_500_000;
 const SUB_ACTIVE_SECS: u64 = 25;
 /// Un subagente terminado se queda en la lista este rato (para ver que acabó) y luego desaparece.
 const HIDE_DONE_SECS: u64 = 90;
+/// Un subagente que su `.meta.json` da por vivo pero cuyo fichero no se toca desde hace este rato se da por muerto
+/// (se mató la sesión o se cortó): sin esto se quedaría «activo» para siempre.
+const SUB_STALE_SECS: u64 = 3600;
 /// Largo máximo del último pedido que se manda a la interfaz (ella lo recorta otra vez para la ficha).
 const PROMPT_CHARS: usize = 300;
 
@@ -392,19 +395,98 @@ fn subagents(parsed: &Parsed, transcript: &Path, session_id: &str) -> Vec<Sub> {
     subagents_at(parsed, transcript, session_id, now)
 }
 
+/// Lo que Claude Code guarda junto a cada subagente en `subagents/agent-<id>.meta.json`.
+#[derive(Debug, Clone, Default)]
+struct Meta {
+    agent_id: String,
+    kind: String,
+    description: String,
+    tool_use_id: Option<String>,
+    background: bool,
+    finished: bool,
+}
+
+static META_CACHE: OnceLock<Mutex<HashMap<PathBuf, (CacheKey, Meta)>>> = OnceLock::new();
+
+fn read_meta(path: &Path, agent_id: &str) -> Option<Meta> {
+    let md = std::fs::metadata(path).ok()?;
+    let key = (md.modified().ok()?, md.len());
+    let cache = META_CACHE.get_or_init(Default::default);
+    if let Some((k, m)) = cache.lock().get(path) {
+        if *k == key {
+            return Some(m.clone());
+        }
+    }
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let m = Meta {
+        agent_id: agent_id.to_string(),
+        kind: v["agentType"].as_str().unwrap_or("agent").to_string(),
+        description: v["description"].as_str().unwrap_or("").to_string(),
+        tool_use_id: v["toolUseId"].as_str().map(str::to_string),
+        background: v["requestShape"].as_str() == Some("background"),
+        finished: v["finished"].as_bool().unwrap_or(false),
+    };
+    cache.lock().insert(path.to_path_buf(), (key, m.clone()));
+    Some(m)
+}
+
+/// Todos los `.meta.json` de la carpeta de subagentes, en el orden en que se lanzaron (fecha de creación).
+fn read_metas(dir: &Path) -> Vec<Meta> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut v: Vec<(SystemTime, Meta)> = rd
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let id = name.strip_prefix("agent-")?.strip_suffix(".meta.json")?.to_string();
+            if !crate::subtranscript::valid_id(&id) {
+                return None;
+            }
+            let p = e.path();
+            let born = e.metadata().ok().and_then(|m| m.created().or_else(|_| m.modified()).ok()).unwrap_or(SystemTime::UNIX_EPOCH);
+            read_meta(&p, &id).map(|m| (born, m))
+        })
+        .collect();
+    v.sort_by_key(|(t, _)| *t);
+    v.into_iter().map(|(_, m)| m).collect()
+}
+
 fn subagents_at(parsed: &Parsed, transcript: &Path, session_id: &str, now: u64) -> Vec<Sub> {
     let dir = transcript.parent().map(|p| p.join(session_id).join("subagents"));
     let mut out: Vec<Sub> = Vec::new();
-    for c in &parsed.calls {
+    let file_age_of = |a: &str| -> Option<u64> {
+        let d = dir.as_ref()?;
+        std::fs::metadata(d.join(format!("agent-{a}.jsonl"))).and_then(|m| m.modified()).ok()?.elapsed().ok().map(|e| e.as_secs())
+    };
+    // 1) Los `.meta.json`: cubren TODA la sesión (la transcripción solo se lee por el final) y dicen si ya acabó.
+    let metas = dir.as_deref().map(read_metas).unwrap_or_default();
+    let mut seen: HashSet<String> = HashSet::new();
+    for m in &metas {
+        let call = parsed.calls.iter().find(|c| m.tool_use_id.as_deref() == Some(c.id.as_str()) || c.agent_id.as_deref() == Some(m.agent_id.as_str()));
+        if let Some(c) = call {
+            seen.insert(c.id.clone());
+        }
+        let notified = call.is_some_and(|c| c.notified);
+        let file_age = file_age_of(&m.agent_id);
+        let running = !m.finished && !notified && file_age.is_some_and(|a| a < SUB_STALE_SECS);
+        let ended_ago = if running { None } else { call.and_then(|c| c.done_at).map(|t| now.saturating_sub(t)).or(file_age) };
+        if ended_ago.is_some_and(|s| s > HIDE_DONE_SECS) {
+            continue;
+        }
+        out.push(Sub {
+            id: m.agent_id.clone(),
+            kind: m.kind.clone(),
+            description: m.description.clone(),
+            state: if running { "running" } else { "done" }.into(),
+            background: m.background || call.is_some_and(|c| c.background),
+        });
+    }
+    // 2) Llamadas de la transcripción sin `.meta.json` (aún no escrito, o versiones de Claude Code que no lo tienen).
+    for c in parsed.calls.iter().filter(|c| !seen.contains(&c.id)) {
+        if c.agent_id.as_ref().is_some_and(|a| metas.iter().any(|m| &m.agent_id == a)) {
+            continue;
+        }
         // Edad del fichero del subagente (última escritura), si se conoce.
-        let file_age = match (&c.agent_id, &dir) {
-            (Some(a), Some(d)) => std::fs::metadata(d.join(format!("agent-{a}.jsonl")))
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.elapsed().ok())
-                .map(|e| e.as_secs()),
-            _ => None,
-        };
+        let file_age = c.agent_id.as_deref().and_then(file_age_of);
         let running = if c.notified {
             false // el aviso de fin manda: no hay que esperar a que «se enfríe» el fichero
         } else if c.agent_id.is_some() && dir.is_some() && (!c.finished || c.background) {
@@ -698,6 +780,35 @@ y luego los tests"}})),
         );
     }
 
+    /// Sesión larga: los subagentes lanzados antes del trozo final de la transcripción salen por su `.meta.json`, y uno
+    /// que lleva minutos sin escribir (esperando a un comando largo) sigue «activo» mientras su meta no diga `finished`.
+    #[test]
+    fn los_meta_json_cuentan_todos_los_subagentes_vivos() {
+        let base = std::env::temp_dir().join(format!("orch-meta-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let dir = base.join("s").join("subagents");
+        std::fs::create_dir_all(&dir).unwrap();
+        let meta = |id: &str, desc: &str, fin: bool, tu: &str| {
+            let v = serde_json::json!({"agentType":"obrero","description":desc,"toolUseId":tu,"requestShape":"background","finished":fin});
+            std::fs::write(dir.join(format!("agent-{id}.meta.json")), v.to_string()).unwrap();
+            std::fs::write(dir.join(format!("agent-{id}.jsonl")), "{}\n").unwrap();
+        };
+        for i in 0..17 {
+            meta(&format!("a{i:02}"), &format!("vivo {i}"), false, &format!("toolu_{i}"));
+        }
+        meta("b01", "acabado", true, "toolu_x");
+        // La transcripción (su final) solo ve uno de los 17, y además sin fichero reciente según la regla vieja.
+        let p = parse_transcript(&lineas_subagente_en_segundo_plano(None));
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let subs = subagents_at(&p, &base.join("s.jsonl"), "s", now);
+        assert_eq!(subs.iter().filter(|s| s.state == "running").count(), 17);
+        assert!(subs.iter().any(|s| s.description == "acabado" && s.state == "done"));
+        assert!(subs.iter().all(|s| s.kind == "obrero" && s.background));
+        // La llamada de la transcripción («ag-9», sin meta) no se pierde.
+        assert!(subs.iter().any(|s| s.id == "ag-9"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     /// Contra datos reales: `cargo test real -- --ignored --nocapture`.
     #[test]
     #[ignore]
@@ -740,7 +851,7 @@ y luego los tests"}})),
     #[ignore]
     fn real_claude_link() {
         let home = std::env::var("USERPROFILE").unwrap();
-        let dir = Path::new(&home).join(".claude");
+        let dir = Path::new(&home).join(std::env::var("ORCH_REAL_DIR").unwrap_or(".claude".into()));
         let mut sys = System::new();
         sys.refresh_processes(ProcessesToUpdate::All, true);
         let mut probados = 0;
