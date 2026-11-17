@@ -5,6 +5,8 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-11-18
+
 ### Added
 - **Agent environment variables** (Settings → Agents): a list of `NAME = value` pairs added to every agent terminal Orchestra
   starts (Claude, Codex, opencode and MCP sign-in terminals, also restored ones). Each account can have its own list (Settings →
