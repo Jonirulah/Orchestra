@@ -8,8 +8,8 @@
 ## Datos medidos (instancia del usuario, solo lectura, 18-11 18:07)
 - Árbol de procesos: panel 230852 lanzado 16:47:03 con --resume 3ef950e6; 35 s después el usuario abre «claude -r» y elige f249483e.
   Panel 228984 lanzado 16:47:22 con --resume f249483e; el usuario abre «claude -r» y elige 3ef950e6. => Orchestra CRUZÓ las dos sesiones.
-- Archivos huérfanos sessions/<pid>.json (procesos muertos, nunca limpiados): .claude-alpire tiene 3 (pids 151696/224168/294648)
-  con sessionId 08824622/3ef950e6/f249483e; .claude-supra 1, .claude-samchy 1, .claude 1+. Claude Code solo limpia los de su carpeta.
+- Archivos huérfanos sessions/<pid>.json (procesos muertos, nunca limpiados): <cuenta-A> tiene 3 (pids 151696/224168/294648)
+  con sessionId 08824622/3ef950e6/f249483e; <cuenta-B> 1, <cuenta-C> 1, .claude 1+. Claude Code solo limpia los de su carpeta.
 - scan_one acepta CUALQUIER pid del árbol del panel (powershell, git, node, godot...) que tenga sessions/<pid>.json en CUALQUIER cuenta:
   con un pid reutilizado por Windows, el panel «adopta» la sesión de un Claude muerto de otro panel. El BFS mira primero la raíz (powershell).
 - sessions/<pid>.json trae procStart = FILETIME de creación del proceso (comprobado: 103544 → 16:49:10 = CreationDate).
@@ -23,7 +23,7 @@
 ## Hecho / cómo se comprobó
 - Causa 1 (Rust): session_file_fits() en agents.rs; scan_one descarta archivos cuyo procStart/startedAt no casa con el arranque del pid.
   Tests: un_pid_reutilizado_no_hereda_la_sesion_de_un_claude_muerto (plantado sin el check → FAILED; con él → ok),
-  la_marca_de_arranque_decide... (muestra real 103544). real_claude_link (ignored, ORCH_REAL_DIR=.claude-ellisce) → 5/5 sesiones vivas siguen enlazadas.
+  la_marca_de_arranque_decide... (muestra real 103544). real_claude_link (ignored, ORCH_REAL_DIR=<cuenta-D>) → 5/5 sesiones vivas siguen enlazadas.
 - Causas 2-4 (TS): model.ts withResume, duplicateResumeLosers, stripResume quita --continue, restoreSpecFor({taken}), trackSession({since}).
   store: resumeSavedSessions desduplica (gana el since más reciente; sin since, el primero) y avisa (toast sessionShared);
   restartNow → refreshClaudeResume (rehace --resume desde lastSession, no si otro panel vivo la tiene); PaneView: prepareLaunch antes del 1.er lanzamiento;
@@ -41,7 +41,7 @@
   No medido: el id transitorio antes de elegir en el selector (inocuo: sin transcripción → nueva; no gana duplicados).
 
 ## Pendiente / no probado
-- Con Claude real (solo doble). Robo por pid reutilizado: reproducido en test Rust, no observado en vivo (los huérfanos de .claude-alpire
+- Con Claude real (solo doble). Robo por pid reutilizado: reproducido en test Rust, no observado en vivo (los huérfanos de <cuenta-A>
   existen, pero no se pudo ver la reutilización en el momento).
 - Cambio de cuenta (switchAccount) sin sesión: ahora nueva + aviso; sin E2E.
 
