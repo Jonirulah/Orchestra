@@ -273,9 +273,10 @@
   .dead-bar.gaveup .ricon { color: var(--bad); }
   /* Barra fina de la cuenta atrás, pegada al borde de arriba de la franja. */
   .dead-bar .prog { position: absolute; left: 0; top: -1px; height: 2px; background: var(--warn); transition: width 0.25s linear; }
+  /* transform (y no left): la anima el compositor sin recalcular estilo en cada fotograma. 30 % de ancho: -100 %..333 % de sí misma. */
   .dead-bar .prog.indet { width: 30%; animation: orch-indet 1.2s ease-in-out infinite; }
-  @keyframes orch-indet { 0% { left: -30%; } 100% { left: 100%; } }
-  @media (prefers-reduced-motion: reduce) { .dead-bar .prog { transition: none; } .dead-bar .prog.indet { animation: none; left: 0; width: 100%; opacity: 0.5; } }
+  @keyframes orch-indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(333.4%); } }
+  @media (prefers-reduced-motion: reduce) { .dead-bar .prog { transition: none; } .dead-bar .prog.indet { animation: none; transform: none; left: 0; width: 100%; opacity: 0.5; } }
   /* Velo sobre el terminal congelado: atenúa sin tapar la franja (z 4) y deja seleccionar y copiar. */
   .veil { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: grayscale(0.7); }
   .state.amber { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); }

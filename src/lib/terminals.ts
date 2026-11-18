@@ -19,6 +19,8 @@ import { copiedCount, ctrlCAction, parseOsc52, rightClickAction, shouldHintShift
 import { MdColorizer, mdOwnKey, mdTermTheme } from './mdcolor.ts';
 import type { ClaudeMdColors } from './settings.ts';
 import type { MdPalette } from './mdcolor.ts';
+import { freshRetry, webglLost, webglOk } from './webglretry.ts';
+import type { WebglRetryState } from './webglretry.ts';
 
 export interface TermHooks {
   /** La shell avisa de su carpeta (OSC 9;9 o OSC 7); ya validada. */
@@ -100,6 +102,9 @@ interface Entry {
   search: SearchAddon;
   el: HTMLDivElement;
   webgl?: WebglAddon;
+  /** Reintento de WebGL tras perder el contexto (ver webglretry.ts). */
+  glRetry: WebglRetryState;
+  glTimer?: number;
   mounted: boolean;
   lastCols: number;
   lastRows: number;
@@ -202,7 +207,7 @@ function create(id: string): Entry {
   getStash().appendChild(el);
   term.open(el);
 
-  const entry: Entry = { id, term, fit, search, el, mounted: false, lastCols: 0, lastRows: 0 };
+  const entry: Entry = { id, term, fit, search, el, glRetry: freshRetry(), mounted: false, lastCols: 0, lastRows: 0 };
 
   term.onData((d) => { hooks.onInput?.(id, d); be.ptyWrite(id, d); });
   term.onTitleChange((t) => hooks.onTitle(id, t));
@@ -387,17 +392,46 @@ export async function restart(pane: Pane, banner?: string): Promise<void> {
   hooks.onState(pane.id, 'running');
 }
 
-function acquireWebgl(e: Entry): void {
+function acquireWebgl(e: Entry, retry = false): void {
   if (e.webgl || webglCount >= MAX_WEBGL) return;
+  clearTimeout(e.glTimer); e.glTimer = undefined;
   try {
     const w = new WebglAddon();
-    w.onContextLoss(() => { w.dispose(); if (e.webgl === w) { e.webgl = undefined; webglCount--; } });
+    w.onContextLoss(() => {
+      w.dispose();
+      if (e.webgl !== w) return;
+      e.webgl = undefined; webglCount--;
+      scheduleWebgl(e); // sin esto el panel se quedaba en el renderizador DOM (mucho más caro) hasta volver a montarlo
+    });
     e.term.loadAddon(w);
     e.webgl = w;
     webglCount++;
-  } catch { /* se queda con el renderizador DOM */ }
+    e.glRetry = webglOk(e.glRetry, Date.now());
+    if (retry) e.term.refresh(0, e.term.rows - 1); // mount() ya repinta; un reintento no
+  } catch { scheduleWebgl(e); /* de momento, renderizador DOM; se reintenta */ }
 }
+/** Contador de reintentos hechos (para medir y para las pruebas por CDP). */
+let webglRetries = 0;
+function scheduleWebgl(e: Entry): void {
+  clearTimeout(e.glTimer);
+  const r = webglLost(e.glRetry, Date.now());
+  e.glRetry = r.state;
+  e.glTimer = window.setTimeout(() => {
+    e.glTimer = undefined;
+    if (!e.mounted || !entries.has(e.id)) return; // al volver a montarse lo pide mount()
+    webglRetries++;
+    acquireWebgl(e, true);
+  }, r.delayMs);
+}
+/** Paneles con WebGL / montados / reintentos hechos: lo lee la medida por CDP (`window.__orchWebgl()`). */
+export function webglStats(): { webgl: number; mounted: number; retries: number } {
+  let webgl = 0, mounted = 0;
+  for (const e of entries.values()) { if (e.webgl) webgl++; if (e.mounted) mounted++; }
+  return { webgl, mounted, retries: webglRetries };
+}
+(globalThis as { __orchWebgl?: () => unknown }).__orchWebgl = webglStats;
 function releaseWebgl(e: Entry): void {
+  clearTimeout(e.glTimer); e.glTimer = undefined;
   if (!e.webgl) return;
   try { e.webgl.dispose(); } catch { /* ya liberado */ }
   e.webgl = undefined;

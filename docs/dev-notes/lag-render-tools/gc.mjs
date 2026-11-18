@@ -1,0 +1,13 @@
+const port = process.argv[2];
+const list = await (await fetch('http://127.0.0.1:' + port + '/json')).json();
+const page = list.find((t) => t.type === 'page');
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+let id = 0; const pend = new Map();
+ws.addEventListener('message', (ev) => { const m = JSON.parse(ev.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m.result ?? m.error); pend.delete(m.id); } });
+const send = (method, params = {}) => new Promise((res) => { const my = ++id; pend.set(my, res); ws.send(JSON.stringify({ id: my, method, params })); });
+await new Promise((r) => ws.addEventListener('open', r));
+await send('HeapProfiler.enable'); await send('HeapProfiler.collectGarbage'); await send('HeapProfiler.collectGarbage');
+const u = await send('Runtime.getHeapUsage');
+const r = await send('Runtime.evaluate', { expression: "JSON.stringify({nodes: document.getElementsByTagName('*').length})", returnByValue: true });
+console.log('usedMB=' + (u.usedSize / 1048576).toFixed(1) + ' totalMB=' + (u.totalSize / 1048576).toFixed(1) + ' ' + r.result.value);
+ws.close(); process.exit(0);
