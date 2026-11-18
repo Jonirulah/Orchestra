@@ -3,9 +3,16 @@
 All notable changes to Orchestra are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project follows [Semantic Versioning](https://semver.org/) (0.x: anything may change between minor versions).
 
-## [Unreleased]
+## [0.4.7] - 2026-11-18
 
 ### Fixed
+- **The window got sluggish with busy agents**: the «busy» ring next to each agent in the sidebar was animated with `box-shadow`,
+  which makes the page restyle and repaint at the monitor's refresh rate (240 times a second on a 240 Hz screen) for as long as any
+  agent is busy. It now runs on the compositor (transform/opacity) and looks the same; the indeterminate progress bar of a starting
+  pane too. Measured with 6 busy panes: main thread from 32-35 % to 11-14 %. A test now rejects endless animations of anything else.
+- **Terminals that lost GPU rendering kept drawing on the CPU forever**: when WebView2 dropped a terminal's WebGL context (busy GPU),
+  the pane stayed on xterm's DOM renderer until it was remounted. Orchestra now tries again after 1 s, 5 s, 30 s, 2 min and then
+  every 5 min.
 - **Each Claude pane resumes its own conversation**, also after *Restart*. Restart used the `--resume` baked when the pane was launched,
   so a pane where you had switched conversation (`/resume`, `claude -r`) went back to the old one, and that one was then remembered for
   the next reopen. A pane switched to another account (or an older saved one) could keep `--continue` and reopen «the latest
