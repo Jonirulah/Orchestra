@@ -32,8 +32,9 @@ export interface Pane {
   lastSession?: LastSession;
 }
 
-/** `id` = UUID de la sesión; `dir` = carpeta de la cuenta donde vive su transcripción; `ended` = la cerró el usuario (/exit). */
-export interface LastSession { id: string; dir: string; ended?: boolean }
+/** `id` = UUID de la sesión; `dir` = carpeta de la cuenta donde vive su transcripción; `ended` = la cerró el usuario (/exit);
+ *  `since` = cuándo (ms) vio Orchestra por primera vez esa sesión en este panel (desempata dos paneles con la misma). */
+export interface LastSession { id: string; dir: string; ended?: boolean; since?: number }
 
 export interface Workspace {
   id: string;
@@ -579,10 +580,26 @@ export function resumeCandidate(pane: Pick<Pane, 'kind' | 'lastSession'>, settin
 }
 
 /** Sesión que hay que recordar tras un escaneo: `null` si no cambia nada (mismo id y carpeta, y no estaba cerrada). */
-export function trackSession(cur: LastSession | undefined, seen: { sessionId?: string; configDir?: string }): LastSession | null {
+export function trackSession(cur: LastSession | undefined, seen: { sessionId?: string; configDir?: string }, now: number = Date.now()): LastSession | null {
   if (!isSessionId(seen.sessionId) || !seen.configDir) return null;
   if (cur && cur.id === seen.sessionId && cur.dir === seen.configDir && !cur.ended) return null;
-  return { id: seen.sessionId, dir: seen.configDir };
+  return { id: seen.sessionId, dir: seen.configDir, since: now };
+}
+
+/**
+ * Paneles que NO deben retomar su sesión porque otro panel recuerda la misma: dos `claude --resume <id>` escribirían a la vez en
+ * el mismo `<id>.jsonl`. Se la queda el panel que la tomó MÁS TARDE (`since`: el último sitio donde el usuario la abrió a
+ * propósito, p. ej. con `claude -r`); sin `since` (estado de antes), el primero en el orden de las pestañas. Los demás, Claude nuevo.
+ * `cands` va en el orden de las pestañas; devuelve los ids de panel que pierden.
+ */
+export function duplicateResumeLosers(cands: { paneId: string; id: string; since?: number }[]): Set<string> {
+  const best = new Map<string, { paneId: string; since: number }>();
+  for (const c of cands) {
+    const s = typeof c.since === 'number' && Number.isFinite(c.since) ? c.since : -Infinity;
+    const cur = best.get(c.id);
+    if (!cur || s > cur.since) best.set(c.id, { paneId: c.paneId, since: s });
+  }
+  return new Set(cands.filter((c) => best.get(c.id)?.paneId !== c.paneId).map((c) => c.paneId));
 }
 
 /** Lo que se guarda en el disco: si el panel muestra «terminado» con código 0 (el usuario salió de Claude y cerró el shell), la sesión queda cerrada. */
@@ -596,22 +613,35 @@ export type RestorePlan = { mode: 'fresh' } | { mode: 'resume'; id: string };
 /**
  * Cómo se relanza un panel al reabrir Orchestra. `exists` = la transcripción de la sesión (projects, una carpeta por proyecto, `<id>.jsonl`) sigue en disco
  * (lo comprueba el backend). Solo se retoma con el ajuste encendido, un panel de Claude, una sesión recordada con id válido,
- * de la cuenta del propio panel, que el usuario no cerró y cuya transcripción exista; en cualquier otro caso, Claude nuevo.
+ * de la cuenta del propio panel, que el usuario no cerró, cuya transcripción exista y que no sea de otro panel (`taken`, ver
+ * `duplicateResumeLosers`); en cualquier otro caso, Claude nuevo. Vale igual para reabrir Orchestra y para «Reiniciar» un panel.
  */
 export function restoreSpecFor(
   pane: Pick<Pane, 'kind' | 'lastSession'>,
-  ctx: { setting: boolean; account: Pick<Account, 'dir' | 'provider'> | undefined; exists: boolean },
+  ctx: { setting: boolean; account: Pick<Account, 'dir' | 'provider'> | undefined; exists: boolean; taken?: boolean },
 ): RestorePlan {
   const id = resumeCandidate(pane, ctx.setting, ctx.account);
-  return id && ctx.exists ? { mode: 'resume', id } : { mode: 'fresh' };
+  return id && ctx.exists && !ctx.taken ? { mode: 'resume', id } : { mode: 'fresh' };
 }
 
-/** Quita `--resume <id>` de la orden de un panel de Claude (el panel se reinicia «nuevo»). */
+/** Quita `--resume <id>` y `--continue` de la orden de un panel de Claude (el panel se reinicia «nuevo»). Sin quitar
+ *  `--continue`, un panel que alguna vez lo llevó (cambio de cuenta sin sesión conocida) retomaba al reabrir «la última de la
+ *  carpeta», que con varios paneles en la misma carpeta es la de otro. */
 export function stripResume(spec: PaneSpec): PaneSpec {
   const args = spec.args ?? [];
   const last = args[args.length - 1] ?? '';
-  const next = last.replace(/ --resume [0-9a-f-]{36}(?= |$)/, '');
+  const next = last.replace(/ --resume [0-9a-f-]{36}(?= |$)/g, '').replace(/ --continue(?= |$)/g, '');
   return next === last ? spec : { ...spec, args: [...args.slice(0, -1), next] };
+}
+
+/** La orden de un panel de Claude retomando `id` (o nueva con `null`), sin tocar el resto (`--settings`, `--mcp-config`, entorno). */
+export function withResume(spec: PaneSpec, id: string | null): PaneSpec {
+  const s = stripResume(spec);
+  if (!isSessionId(id)) return s;
+  const args = s.args ?? [];
+  const last = args[args.length - 1] ?? '';
+  const next = last.replace(/^(&\s*claude)(?= |$)/, `$1 --resume ${id}`);
+  return next === last ? s : { ...s, args: [...args.slice(0, -1), next] };
 }
 
 /** Lanza Claude Code dentro de un PowerShell que sigue vivo al salir de claude.

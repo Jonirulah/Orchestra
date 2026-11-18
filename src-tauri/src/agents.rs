@@ -521,6 +521,32 @@ fn subagents_at(parsed: &Parsed, transcript: &Path, session_id: &str, now: u64) 
 
 // ---------- API ----------
 
+/// Segundos entre 1601-01-01 (FILETIME de Windows) y 1970-01-01.
+const FILETIME_EPOCH_SECS: u64 = 11_644_473_600;
+/// Holgura entre el arranque del proceso según el sistema (segundos enteros) y el que apunta Claude Code.
+const START_SLACK_SECS: u64 = 3;
+/// Sin `procStart` (versiones viejas de Claude Code): `startedAt` se escribe poco después de arrancar el proceso.
+const STARTED_AT_MAX_LAG_SECS: u64 = 600;
+
+/// ¿Es el sessions/<pid>.json de ESTE proceso (arrancado en `proc_start`, epoch en s) y no de uno muerto con el mismo pid?
+/// `procStart` = FILETIME (100 ns desde 1601) de la creación del proceso; si falta, `startedAt` (ms) no puede ser anterior
+/// al arranque del proceso ni muy posterior. Sin proceso o sin ninguna de las dos marcas, no se fía.
+pub(crate) fn session_file_fits(v: &Value, proc_start: Option<u64>) -> bool {
+    let Some(ps) = proc_start else { return false };
+    let ft = v["procStart"].as_str().and_then(|s| s.parse::<u64>().ok()).or_else(|| v["procStart"].as_u64());
+    if let Some(ft) = ft {
+        let secs = (ft / 10_000_000).saturating_sub(FILETIME_EPOCH_SECS);
+        return secs.abs_diff(ps) <= START_SLACK_SECS;
+    }
+    match v["startedAt"].as_u64() {
+        Some(ms) => {
+            let s = ms / 1000;
+            s + START_SLACK_SECS >= ps && s <= ps + STARTED_AT_MAX_LAG_SECS
+        }
+        None => false,
+    }
+}
+
 fn scan_one(sys: &System, pane_id: &str, root_pid: u32, dirs: &[PathBuf]) -> Option<AgentInfo> {
     let tree = descendants(sys, root_pid);
     // Claude: algún pid del árbol con sessions/<pid>.json en alguna carpeta de cuenta.
@@ -529,6 +555,11 @@ fn scan_one(sys: &System, pane_id: &str, root_pid: u32, dirs: &[PathBuf]) -> Opt
             let f = dir.join("sessions").join(format!("{pid}.json"));
             let Ok(txt) = std::fs::read_to_string(&f) else { continue };
             let Ok(v) = serde_json::from_str::<Value>(&txt) else { continue };
+            // Un sessions/<pid>.json huérfano (Claude muerto sin limpiar) con un pid que Windows ya ha dado a otro proceso
+            // del panel haría que el panel «adoptase» la sesión de otro: solo vale si el archivo es de ESTE proceso.
+            if !session_file_fits(&v, sys.process(sysinfo::Pid::from_u32(*pid)).map(|p| p.start_time())) {
+                continue;
+            }
             let sid = v["sessionId"].as_str().map(str::to_string);
             let mut info = AgentInfo {
                 pane_id: pane_id.into(),
@@ -973,6 +1004,50 @@ y luego los tests"}})),
         }
         assert!(is_session_id(SID));
         let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// Un sessions/<pid>.json huérfano cuyo pid ha reutilizado otro proceso del panel no da su sesión al panel
+    /// (causa de que dos paneles acabasen con la sesión cruzada al reabrir).
+    #[test]
+    fn un_pid_reutilizado_no_hereda_la_sesion_de_un_claude_muerto() {
+        let me = std::process::id();
+        let d = std::env::temp_dir().join(format!("orch-reuse-{me}"));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("sessions")).unwrap();
+        let mut sys = System::new();
+        sys.refresh_processes(ProcessesToUpdate::All, true);
+        let start = sys.process(sysinfo::Pid::from_u32(me)).unwrap().start_time();
+        let ft = |s: u64| ((s + FILETIME_EPOCH_SECS) * 10_000_000 + 1_234_567).to_string();
+        let put = |extra: &str| {
+            let txt = format!(r#"{{"pid":{me},"sessionId":"{SID}","cwd":"C:\\x","status":"idle","kind":"interactive"{extra}}}"#);
+            std::fs::write(d.join("sessions").join(format!("{me}.json")), txt).unwrap();
+        };
+        let dirs = [d.clone()];
+        // Huérfano de un Claude que arrancó hace una hora con este mismo pid.
+        put(&format!(r#","procStart":"{}","startedAt":{}"#, ft(start - 3600), (start - 3600) * 1000));
+        assert!(scan_one(&sys, "p", me, &dirs).is_none(), "huérfano con procStart ajeno");
+        // El de este proceso.
+        put(&format!(r#","procStart":"{}","startedAt":{}"#, ft(start), start * 1000 + 800));
+        assert_eq!(scan_one(&sys, "p", me, &dirs).and_then(|a| a.session_id).as_deref(), Some(SID));
+        // Sin procStart (Claude Code viejo): manda startedAt.
+        put(&format!(r#","startedAt":{}"#, (start - 3600) * 1000));
+        assert!(scan_one(&sys, "p", me, &dirs).is_none(), "huérfano sin procStart");
+        put(&format!(r#","startedAt":{}"#, start * 1000 + 1500));
+        assert!(scan_one(&sys, "p", me, &dirs).is_some());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn la_marca_de_arranque_decide_si_el_archivo_es_del_proceso() {
+        let v = |s: &str| serde_json::from_str::<Value>(s).unwrap();
+        // Muestra real: pid 103544, procStart 134394905506739305 = 2026-11-18 15:49:10 UTC = epoch 1795016950.
+        let real = v(r#"{"procStart":"134394905506739305","startedAt":1795016952878}"#);
+        assert!(session_file_fits(&real, Some(1_795_016_950)));
+        assert!(session_file_fits(&real, Some(1_795_016_952)));
+        assert!(!session_file_fits(&real, Some(1_795_016_950 + 60)));
+        assert!(!session_file_fits(&real, Some(1_795_016_950 - 3600)));
+        assert!(!session_file_fits(&real, None), "sin proceso no se fía");
+        assert!(!session_file_fits(&v("{}"), Some(1_795_016_950)), "sin marcas no se fía");
     }
 
     #[test]

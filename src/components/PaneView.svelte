@@ -77,7 +77,8 @@
   onMount(() => {
     const isNew = T.ensure(pane);
     T.mount(pane.id, host);
-    if (isNew) requestAnimationFrame(() => requestAnimationFrame(() => T.launch($state.snapshot(pane) as Pane)));
+    // Un panel de Claude que se monta tarde (pestaña sin abrir desde el arranque) revisa antes su --resume: otro panel pudo tomar esa sesión.
+    if (isNew) requestAnimationFrame(() => requestAnimationFrame(() => void app.prepareLaunch(pane.id).then(() => T.launch($state.snapshot(pane) as Pane))));
     const ro = new ResizeObserver(() => T.fitNow(pane.id));
     ro.observe(host);
     const onSearch = (e: Event) => { if ((e as CustomEvent).detail === pane.id) void openSearch(); };

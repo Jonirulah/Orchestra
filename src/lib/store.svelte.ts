@@ -11,7 +11,7 @@ import {
   sshArgs, sshTarget, swapPanes, uid, restorableSpec,
   exportHosts, hostFromSshConfig, hostSecretKey, newConfigEntries, normalizeHost, sshInstallKeySpec, sshSpec,
   hostKeyAction, normalizeAccounts, providerOf, providerSpec,
-  isSessionId, resumeCandidate, restoreSpecFor, sessionForSave, stripResume, trackSession, mcpLoginSpec } from './model.ts';
+  isSessionId, resumeCandidate, restoreSpecFor, sessionForSave, stripResume, trackSession, mcpLoginSpec, duplicateResumeLosers, withResume } from './model.ts';
 import type { Account, Dir, Host, Pane, Provider, Workspace } from './model.ts';
 import { claudeAccountName, displayName, hostKeyBlockedMsg } from './model.ts';
 import { fmtDuration, nextAlert, pickAccount } from './policy.ts';
@@ -319,24 +319,55 @@ class AppState {
    * haya otro panel en la misma carpeta) siempre que la transcripción siga en disco; si no, Claude nuevo.
    */
   private async resumeSavedSessions(): Promise<void> {
-    const jobs: Promise<void>[] = [];
+    const setting = this.settings.restoreClaudeSessions;
+    const panes: { p: Pane; acc: Account }[] = [];
     for (const w of this.workspaces) {
       for (const p of w.panes) {
         const acc = p.kind === 'agent' ? this.accountById(p.ref) : undefined;
-        if (!acc || providerOf(acc) !== 'claude') continue;
-        const setting = this.settings.restoreClaudeSessions;
-        jobs.push((async () => {
-          const id = resumeCandidate(p, setting, acc);
-          let exists = false;
-          if (id) { try { exists = await be.claudeSessionExists(acc.dir, id); } catch { /* sin comprobar = no se retoma */ } }
-          const plan = restoreSpecFor(p, { setting, account: acc, exists });
-          p.spec = plan.mode === 'resume'
-            ? claudeSpec(acc, { cwd: p.spec.cwd, resumeId: plan.id, settingsPath: this.usageSettings || undefined, mcpConfig: this.mcpConfigPath })
-            : stripResume(p.spec);
-        })());
+        if (acc && providerOf(acc) === 'claude') panes.push({ p, acc });
       }
     }
-    await Promise.all(jobs);
+    // Dos paneles que recuerdan la misma sesión: solo uno la retoma (si no, dos claude escriben a la vez en el mismo .jsonl).
+    const losers = duplicateResumeLosers(panes.flatMap(({ p, acc }) => {
+      const id = resumeCandidate(p, setting, acc);
+      return id ? [{ paneId: p.id, id, since: p.lastSession?.since }] : [];
+    }));
+    await Promise.all(panes.map(async ({ p, acc }) => {
+      const id = resumeCandidate(p, setting, acc);
+      let exists = false;
+      if (id) { try { exists = await be.claudeSessionExists(acc.dir, id); } catch { /* sin comprobar = no se retoma */ } }
+      const plan = restoreSpecFor(p, { setting, account: acc, exists, taken: losers.has(p.id) });
+      if (losers.has(p.id)) delete p.lastSession; // ni al montarse ni al reiniciar vuelve a por la sesión de otro panel
+      p.spec = plan.mode === 'resume'
+        ? claudeSpec(acc, { cwd: p.spec.cwd, resumeId: plan.id, settingsPath: this.usageSettings || undefined, mcpConfig: this.mcpConfigPath })
+        : stripResume(p.spec);
+    }));
+    if (losers.size) this.toast(t('store.toast.sessionShared', { n: losers.size }));
+  }
+
+  /**
+   * «Reiniciar» (o reconexión) de un panel de Claude: la orden se rehace desde `lastSession`, la sesión que el panel tiene AHORA
+   * (pudo cambiar con /resume, /clear o `claude -r` desde que se lanzó), y no desde el `--resume` que se horneó al abrirlo.
+   * No retoma una sesión que otro panel tiene abierta en este momento.
+   */
+  /** Antes del primer lanzamiento de un panel montado (ver PaneView): misma revisión que «Reiniciar». */
+  async prepareLaunch(id: string): Promise<void> {
+    const p = this.paneById(id);
+    if (p) { try { await this.refreshClaudeResume(p); } catch { /* se lanza con la orden que tenga */ } }
+  }
+
+  private async refreshClaudeResume(p: Pane): Promise<void> {
+    const acc = p.kind === 'agent' ? this.accountById(p.ref) : undefined;
+    if (!acc || providerOf(acc) !== 'claude') return;
+    const setting = this.settings.restoreClaudeSessions;
+    const id = resumeCandidate(p, setting, acc);
+    let exists = false;
+    if (id) { try { exists = await be.claudeSessionExists(acc.dir, id); } catch { /* sin comprobar = no se retoma */ } }
+    const taken = !!id && this.workspaces.some((w) => w.panes.some((o) =>
+      o.id !== p.id && o.lastSession?.id === id && !o.lastSession.ended
+      && (this.claudeSeen.has(o.id) || (!!this.live[o.id]?.state && this.live[o.id].state !== 'exited'))));
+    const plan = restoreSpecFor(p, { setting, account: acc, exists, taken });
+    p.spec = withResume(p.spec, plan.mode === 'resume' ? plan.id : null);
   }
 
   /** Ids de panel en los que el último escaneo vio un Claude: si luego desaparece con el panel vivo, el usuario salió (/exit). */
@@ -1001,7 +1032,7 @@ class AppState {
     await this.rescanAccounts();
   }
 
-  /** Cambia la suscripción de un panel de Claude: relanza `claude --continue` con la otra cuenta. */
+  /** Cambia la suscripción de un panel de Claude: relanza `claude --resume <id>` con la otra cuenta si esta tiene la sesión; si no, Claude nuevo. */
   async switchAccount(paneId: string, accountId: string): Promise<void> {
     const acc = this.accountById(accountId);
     const pane = this.active.panes.find((p) => p.id === paneId);
@@ -1009,13 +1040,15 @@ class AppState {
     // Con la sesión conocida y su transcripción en la carpeta de la cuenta nueva, se retoma ESA (no «la última de la carpeta»).
     const sid = pane.lastSession && !pane.lastSession.ended && isSessionId(pane.lastSession.id) ? pane.lastSession.id : undefined;
     let resumeId: string | undefined;
-    if (sid) { try { if (await be.claudeSessionExists(acc.dir, sid)) resumeId = sid; } catch { /* --continue */ } }
-    pane.spec = claudeSpec(acc, { cwd: pane.spec.cwd, resume: true, resumeId, settingsPath: this.usageSettings || undefined, mcpConfig: this.mcpConfigPath });
+    if (sid) { try { if (await be.claudeSessionExists(acc.dir, sid)) resumeId = sid; } catch { /* nueva */ } }
+    // Sin esa sesión en la cuenta nueva, conversación NUEVA: `--continue` retomaría «la última de la carpeta», que con varios
+    // paneles en la misma carpeta es la de otro panel.
+    pane.spec = claudeSpec(acc, { cwd: pane.spec.cwd, resumeId, settingsPath: this.usageSettings || undefined, mcpConfig: this.mcpConfigPath });
     pane.ref = acc.id;
     pane.title = `Claude · ${acc.name}`;
     this.persist();
     await T.restart($state.snapshot(pane) as Pane);
-    this.toast(t('store.toast.paneSwitched', { name: displayName(acc.name) }));
+    this.toast(t(resumeId ? 'store.toast.paneSwitched' : 'store.toast.paneSwitchedFresh', { name: displayName(acc.name) }));
   }
 
   // ---------- abrir terminales ----------
@@ -1185,7 +1218,7 @@ class AppState {
     const h = p.kind === 'ssh' && p.ref && !p.ref.startsWith('cfg:') ? this.hosts.find((x) => x.id === p.ref) : undefined;
     const go = () => {
       this.refreshSshSpec(p);
-      void T.restart($state.snapshot(p) as Pane, banner);
+      void this.refreshClaudeResume(p).then(() => T.restart($state.snapshot(p) as Pane, banner));
     };
     if (h && hostKeyAction(h, this.settings.sshHostKeyPolicy) !== 'spawn') {
       void this.hostKeyGate(h).then((ok) => { if (ok) go(); });

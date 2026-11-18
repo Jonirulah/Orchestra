@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  claudeSpec, isSessionId, restoreSpecFor, resumeCandidate, sessionForSave, stripResume, trackSession,
+  claudeSpec, duplicateResumeLosers, isSessionId, restoreSpecFor, resumeCandidate, sessionForSave, stripResume, trackSession, withResume,
 } from './model.ts';
 import type { Account, Pane } from './model.ts';
 import { DEFAULTS, SECTION_KEYS, clampSettings, resetSection } from './settings.ts';
@@ -107,8 +107,10 @@ test('stripResume turns a resumed command back into a fresh one and leaves the r
   const r = claudeSpec(acc(), { resumeId: ID1, settingsPath: 'S', mcpConfig: 'M' });
   const f = stripResume(r);
   assert.equal(f.args.at(-1), "& claude --settings 'S' --mcp-config 'M'");
-  const plain = claudeSpec(acc(), { resume: true });
+  const plain = claudeSpec(acc(), {});
   assert.equal(stripResume(plain), plain);
+  // sesion-retomar: --continue también fuera (antes se quedaba y al reabrir retomaba «la última de la carpeta»)
+  assert.equal(stripResume(claudeSpec(acc(), { resume: true })).args.at(-1), '& claude');
   const sh = { program: 'pwsh.exe', args: ['-NoLogo'] };
   assert.equal(stripResume(sh), sh);
 });
@@ -116,12 +118,12 @@ test('stripResume turns a resumed command back into a fresh one and leaves the r
 // ---------- tracking and persistence ----------
 
 test('trackSession: stores a new id, ignores the same one, ignores invalid ids and a missing dir', () => {
-  assert.deepEqual(trackSession(undefined, { sessionId: ID1, configDir: DIR }), { id: ID1, dir: DIR });
+  assert.deepEqual(trackSession(undefined, { sessionId: ID1, configDir: DIR }, 7), { id: ID1, dir: DIR, since: 7 });
   assert.equal(trackSession({ id: ID1, dir: DIR }, { sessionId: ID1, configDir: DIR }), null);
-  assert.deepEqual(trackSession({ id: ID1, dir: DIR }, { sessionId: ID2, configDir: DIR }), { id: ID2, dir: DIR });
-  assert.deepEqual(trackSession({ id: ID1, dir: DIR }, { sessionId: ID1, configDir: 'D:\\c2' }), { id: ID1, dir: 'D:\\c2' });
+  assert.deepEqual(trackSession({ id: ID1, dir: DIR }, { sessionId: ID2, configDir: DIR }, 7), { id: ID2, dir: DIR, since: 7 });
+  assert.deepEqual(trackSession({ id: ID1, dir: DIR }, { sessionId: ID1, configDir: 'D:\\c2' }, 7), { id: ID1, dir: 'D:\\c2', since: 7 });
   // Same id seen again after /exit: the "ended" flag is cleared.
-  assert.deepEqual(trackSession({ id: ID1, dir: DIR, ended: true }, { sessionId: ID1, configDir: DIR }), { id: ID1, dir: DIR });
+  assert.deepEqual(trackSession({ id: ID1, dir: DIR, ended: true }, { sessionId: ID1, configDir: DIR }, 7), { id: ID1, dir: DIR, since: 7 });
   assert.equal(trackSession(undefined, { sessionId: 'nope', configDir: DIR }), null);
   assert.equal(trackSession(undefined, { sessionId: ID1 }), null);
   assert.equal(trackSession(undefined, {}), null);
@@ -164,4 +166,73 @@ test('restoreClaudeSessions: default on, bool-only, in the Agents section reset'
   assert.ok((SECTION_KEYS.agents as readonly string[]).includes('restoreClaudeSessions'));
   const r = resetSection({ ...DEFAULTS, restoreClaudeSessions: false }, 'agents');
   assert.equal(r.restoreClaudeSessions, true);
+});
+
+// ---------- sesion-retomar: cada panel retoma SU sesión (también al Reiniciar) ----------
+
+const ID3 = '11111111-2222-4333-8444-555555555555';
+const lastArg = (s: { args?: string[] }): string => (s.args ?? []).slice(-1)[0] ?? '';
+
+test('stripResume also drops --continue (a pane switched to another account must not reopen «the latest of the folder»)', () => {
+  const cont = claudeSpec(acc(), { cwd: 'E:\\w', resume: true, settingsPath: 'C:\\s.json', mcpConfig: 'C:\\m.json' });
+  assert.match(lastArg(cont), / --continue /);
+  const s = stripResume(cont);
+  assert.doesNotMatch(lastArg(s), /--continue|--resume/);
+  assert.equal(lastArg(s), lastArg(claudeSpec(acc(), { cwd: 'E:\\w', settingsPath: 'C:\\s.json', mcpConfig: 'C:\\m.json' })));
+});
+
+test('withResume: Restart takes the session the pane has NOW, not the --resume baked when it was launched', () => {
+  const opts = { cwd: 'E:\\w', settingsPath: 'C:\\s.json', mcpConfig: 'C:\\m.json' };
+  const baked = claudeSpec(acc(), { ...opts, resumeId: ID1 });
+  const now = withResume(baked, ID2);
+  assert.equal(lastArg(now), lastArg(claudeSpec(acc(), { ...opts, resumeId: ID2 })));
+  assert.equal(lastArg(now).match(/--resume/g)?.length, 1);
+  assert.deepEqual(now.env, baked.env);
+  // null / id inválido -> nueva; desde --continue -> la suya
+  assert.equal(lastArg(withResume(baked, null)), lastArg(claudeSpec(acc(), opts)));
+  assert.equal(lastArg(withResume(baked, 'nope; calc')), lastArg(claudeSpec(acc(), opts)));
+  assert.equal(lastArg(withResume(claudeSpec(acc(), { ...opts, resume: true }), ID3)), lastArg(claudeSpec(acc(), { ...opts, resumeId: ID3 })));
+  // una orden que no es «& claude …» no se toca
+  const sh = { program: 'powershell.exe', args: ['-NoLogo'] };
+  assert.deepEqual(withResume(sh, ID1), sh);
+});
+
+test('duplicateResumeLosers: two panes remembering the same session -> only the one that took it last resumes it', () => {
+  const l = duplicateResumeLosers([
+    { paneId: 'a', id: ID1, since: 100 },
+    { paneId: 'b', id: ID2, since: 50 },
+    { paneId: 'c', id: ID1, since: 300 },
+    { paneId: 'd', id: ID3 },
+    { paneId: 'e', id: ID1, since: 200 },
+  ]);
+  assert.deepEqual([...l].sort(), ['a', 'e']);
+  // sin since (estado guardado antes): el primero en el orden de las pestañas
+  assert.deepEqual([...duplicateResumeLosers([{ paneId: 'x', id: ID2 }, { paneId: 'y', id: ID2 }])], ['y']);
+  assert.equal(duplicateResumeLosers([{ paneId: 'x', id: ID1 }, { paneId: 'y', id: ID2 }]).size, 0);
+});
+
+test('restoreSpecFor: a session taken by another pane starts fresh', () => {
+  assert.deepEqual(restoreSpecFor(pane(), { ...on, taken: true }), { mode: 'fresh' });
+  assert.deepEqual(restoreSpecFor(pane(), { ...on, taken: false }), { mode: 'resume', id: ID1 });
+});
+
+test('trackSession stamps when the pane took the session (since)', () => {
+  const t1 = trackSession(undefined, { sessionId: ID1, configDir: DIR }, 1234);
+  assert.deepEqual(t1, { id: ID1, dir: DIR, since: 1234 });
+  assert.equal(trackSession(t1!, { sessionId: ID1, configDir: DIR }, 9999), null, 'same session: since does not move');
+  assert.equal(trackSession(t1!, { sessionId: ID2, configDir: DIR }, 5678)?.since, 5678);
+});
+
+test('the measured case: 3 panes, same account and folder, two remember the same id -> distinct resumes, no --continue', () => {
+  const ps = [
+    pane({ id: 'p1', lastSession: { id: ID1, dir: DIR, since: 10 } }),
+    pane({ id: 'p2', lastSession: { id: ID2, dir: DIR, since: 20 } }),
+    pane({ id: 'p3', lastSession: { id: ID2, dir: DIR, since: 30 } }),
+    pane({ id: 'p4', lastSession: { id: ID3, dir: DIR, ended: true }, spec: claudeSpec(acc(), { resume: true }) }),
+  ];
+  const losers = duplicateResumeLosers(ps.flatMap((p) => { const id = resumeCandidate(p, true, acc()); return id ? [{ paneId: p.id, id, since: p.lastSession?.since }] : []; }));
+  const cmds = ps.map((p) => { const plan = restoreSpecFor(p, { ...on, taken: losers.has(p.id) }); return lastArg(withResume(p.spec, plan.mode === 'resume' ? plan.id : null)); });
+  const ids = cmds.map((c) => c.match(/--resume (\S+)/)?.[1] ?? null);
+  assert.deepEqual(ids, [ID1, null, ID2, null]);
+  for (const c of cmds) assert.doesNotMatch(c, /--continue/);
 });

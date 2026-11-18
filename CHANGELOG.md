@@ -5,6 +5,14 @@ the project follows [Semantic Versioning](https://semver.org/) (0.x: anything ma
 
 ## [Unreleased]
 
+### Fixed
+- **Each Claude pane resumes its own conversation**, also after *Restart*. Restart used the `--resume` baked when the pane was launched,
+  so a pane where you had switched conversation (`/resume`, `claude -r`) went back to the old one, and that one was then remembered for
+  the next reopen. A pane switched to another account (or an older saved one) could keep `--continue` and reopen «the latest
+  conversation of the folder», which with several panes in one folder belongs to another pane. Two panes remembering the same
+  conversation no longer both resume it (only the one that took it last does). Leftover Claude session files whose pid Windows had given
+  to another process could make a pane adopt someone else's session: they are now matched by process start time.
+
 ## [0.4.6] - 2026-11-18
 
 ### Added

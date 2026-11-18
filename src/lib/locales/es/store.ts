@@ -17,6 +17,8 @@ export default {
   'store.toast.usageRefreshNone': 'No hay ninguna cuenta de Claude con sesión que refrescar',
   'store.toast.usageRefreshOff': 'Cuentas leídas de nuevo. Para tener el uso de todas al día, enciende «Uso desde Anthropic» en Ajustes → Agentes',
   'store.toast.paneSwitched': 'Panel cambiado a la cuenta «{name}» (la conversación continúa)',
+  'store.toast.paneSwitchedFresh': 'Panel cambiado a la cuenta «{name}» (conversación nueva: esa cuenta no tiene copia de la anterior)',
+  'store.toast.sessionShared': 'Dos paneles de Claude estaban en la misma conversación: solo se ha retomado en uno ({n} empieza(n) una nueva para no pisarse)',
   'store.toast.reconnectGaveUp': 'Se ha dejado de reconectar «{name}» tras {n} intentos',
   'store.toast.movedToBackground': '«{title}» pasa a segundo plano (sigue en ejecución)',
   'store.toast.openFailed': 'No se pudo abrir: datos no válidos',

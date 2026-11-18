@@ -50,6 +50,20 @@ Processes do not survive a restart, so every pane is relaunched when it mounts. 
    `claude_session_exists(dir, id)` true; anything else is `fresh`. Resume builds `claudeSpec(acc, { resumeId })`:
    `& claude --resume <id> [--settings …] [--mcp-config …]` (`--mcp-config` is variadic and must stay last).
 4. **Each pane its own.** The id, not `--continue`, is what makes two panes in the same folder resume different conversations.
+   `stripResume` removes `--continue` too, so no restored or restarted Claude pane ever opens «the latest conversation of the folder»
+   (switching a pane to an account that lacks its session starts a new one).
+5. **One pane per session.** Two panes remembering the same id (e.g. the user ran `claude -r` in one and picked the other's) would make
+   two `claude` processes append to the same `<id>.jsonl`. `duplicateResumeLosers` keeps it for the pane that took it last
+   (`lastSession.since`, stamped by `trackSession`; without it, the first in tab order); the others start fresh, forget it, and a toast says so.
+6. **Restart = reopen.** *Restart* (and the first launch of a pane mounted later) goes through `refreshClaudeResume`: the command is rebuilt
+   from `lastSession` with `withResume`, not from the `--resume` baked when the pane was launched (the session may have changed with
+   `/resume`, `/clear` or `claude -r`), and a session another live pane holds is not resumed.
+7. **Whose session file.** `scan_one` only takes `<config>/sessions/<pid>.json` when its `procStart` (FILETIME of the process creation;
+   `startedAt` on old versions) matches the start time of that pid (`session_file_fits`). Claude Code leaves these files behind when it
+   is killed, and Windows reuses pids: without the check, any process in a pane tree with a recycled pid (the PowerShell itself, git, node…)
+   made the pane adopt a dead Claude's session, which was then saved and resumed in the wrong pane.
+
+End-to-end check (no quota used, isolated instance, Claude replaced by a stub): `node scripts/e2e-sesion-retomar.mjs <orchestra.exe> <workdir>`.
 
 `claude_session_exists` (in `agents.rs`) answers whether `<account dir>/projects/*/<id>.jsonl` exists, the same lookup as `find_transcript`.
 
