@@ -225,13 +225,17 @@ ${t('agents.sub.openTitle')}`}>
   .xbtn:hover { color: var(--bad); background: var(--raise); }
   .xbtn.armed { background: var(--bad); color: #1a0a0b; font-weight: 600; }
   .st { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
-  .st.busy { background: var(--accent); animation: pulse 1.2s ease-in-out infinite, ring 1.6s ease-out infinite; }
-  @keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+  /* El aro va en un ::after que solo anima transform y opacity: lo mueve el compositor. Con box-shadow animado, cada agente
+     ocupado obligaba a recalcular estilo y repintar en el hilo principal a la frecuencia del monitor (medido a 240 Hz con
+     6 agentes: hilo principal 27-34 % → 9-14 %; docs/dev-notes/_estado_lag-render.md). */
+  .st.busy { position: relative; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  .st.busy::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none; animation: ring 1.6s ease-out infinite; }
+  @keyframes ring { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(2.55); opacity: 0; } }
   @keyframes orch-spin-mk { to { transform: rotate(360deg); } }
   .sub-row.run .mk { display: inline-block; animation: orch-spin-mk 1.4s linear infinite; }
   .ag { transition: border-color 0.15s, background 0.15s; }
   .ag:hover { background: color-mix(in srgb, var(--raise) 55%, transparent); }
-  @media (prefers-reduced-motion: reduce) { .st.busy, .st.waiting, .sub-row.run .mk { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .st.busy, .st.busy::after, .st.waiting, .sub-row.run .mk { animation: none; } }
   .st.waiting { background: var(--bad); animation: pulse 0.7s ease-in-out infinite; }
   .st.idle { background: var(--ok); }
   @keyframes pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
