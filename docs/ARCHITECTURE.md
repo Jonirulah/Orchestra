@@ -24,6 +24,12 @@ atomically.
   reconnecting view sees no gaps or duplicates. Output travels as raw bytes over a Tauri `Channel`.
 - ConPTY sends a cursor-position query (`ESC[6n`) and blocks until it is answered; in the app xterm answers, in Rust tests the
   test answers.
+- On Windows 10 (build < 22000) the system console host predates mouse support in ConPTY, so Orchestra uses its own:
+  `conpty.dll` + `OpenConsole.exe` (vendored in `src-tauri/vendor/conpty`, embedded in the exe) are extracted to
+  `<data>/conpty/<version>-<hash>/`, checked against their SHA-256 and preloaded before the first PTY
+  (`conpty_bundle.rs`); `portable-pty` then picks the loaded module. `ORCHESTRA_CONPTY=bundled|system` forces either;
+  the choice and any failure go to `<data>/conpty.log`. The bundled host also sends `ESC[c` (DA1) at start and waits
+  up to 1 s for the answer: xterm answers, a Rust test that only answers `ESC[6n` pays that second.
 
 ## Claude accounts
 

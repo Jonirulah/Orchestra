@@ -3,3 +3,5 @@
 *.ico binary
 *.icns binary
 *.bin binary
+*.dll binary
+*.exe binary

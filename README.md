@@ -284,3 +284,8 @@ Issues and pull requests are welcome. Read [docs/CONTRIBUTING.md](docs/CONTRIBUT
 ## License
 
 [MIT](LICENSE). Created by [@jonirulah](https://github.com/Jonirulah).
+
+Orchestra includes the Windows console host (`conpty.dll` and `OpenConsole.exe`) from Microsoft's
+[Windows Terminal](https://github.com/microsoft/terminal), under the MIT license
+([notice](src-tauri/vendor/conpty/LICENSE)). It is used on Windows 10, where the system one does not pass mouse clicks
+to terminal apps; set `ORCHESTRA_CONPTY=bundled` or `ORCHESTRA_CONPTY=system` to force either one.

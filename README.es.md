@@ -298,3 +298,8 @@ van en [CHANGELOG.md](CHANGELOG.md).
 ## Licencia
 
 [MIT](LICENSE). Creado por [@jonirulah](https://github.com/Jonirulah).
+
+Orchestra incluye el anfitrión de consola de Windows (`conpty.dll` y `OpenConsole.exe`) de
+[Windows Terminal](https://github.com/microsoft/terminal), de Microsoft, con licencia MIT
+([aviso](src-tauri/vendor/conpty/LICENSE)). Se usa en Windows 10, donde el del sistema no pasa los clics del ratón a las
+apps de terminal; con `ORCHESTRA_CONPTY=bundled` u `ORCHESTRA_CONPTY=system` se fuerza uno u otro.

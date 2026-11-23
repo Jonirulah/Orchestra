@@ -6,6 +6,7 @@ mod claude_theme_choice;
 mod claude_themes;
 mod clipimg;
 mod commands;
+mod conpty_bundle;
 mod consumo;
 mod fonts;
 mod git;
@@ -193,6 +194,10 @@ fn main() {
             updater::update_install,
         ])
         .setup(|app| {
+            // ConPTY propio en Windows 10 (ratón en las apps de terminal): antes de abrir ningún PTY.
+            if let Ok(dir) = store::base_dir(app.handle()) {
+                conpty_bundle::init(&dir);
+            }
             app.manage(mcp::McpManager::new(app.handle()));
             let rm = remote_metrics::Manager::new(std::sync::Arc::new(remote_metrics::SshLauncher), Default::default());
             remote_metrics::spawn_reaper(&rm);

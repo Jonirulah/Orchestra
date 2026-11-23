@@ -15,7 +15,7 @@ import { themeOf } from './themes.ts';
 import { clearBackground } from './glass.ts';
 import type { TermTheme } from './themes.ts';
 import { parseOsc7, parseOsc9, withCwdTracking } from './gitinfo.ts';
-import { copiedCount, ctrlCAction, parseOsc52, rightClickAction, shouldHintShift } from './termcopy.ts';
+import { copiedCount, ctrlCAction, isDuplicateCopy, parseOsc52, rightClickAction, rightClickOwner, shouldHintShift, type CopyMark } from './termcopy.ts';
 import { MdColorizer, mdOwnKey, mdTermTheme } from './mdcolor.ts';
 import type { ClaudeMdColors } from './settings.ts';
 import type { MdPalette } from './mdcolor.ts';
@@ -56,11 +56,20 @@ export type CopyResult = { ok: true; chars: number; via: CopyVia } | { ok: false
 /** Copia y avisa SIEMPRE del resultado (antes `navigator.clipboard.writeText` sin .catch: los fallos se perdían). */
 function copyOut(id: string, text: string, via: CopyVia): void {
   if (!text) return;
+  // Una acción de copiar = una escritura y un aviso: el mismo texto del mismo panel repetido enseguida no se repite.
+  const mark: CopyMark = { id, text, at: Date.now() };
+  if (isDuplicateCopy(lastCopy, mark)) return;
+  lastCopy = mark;
   be.copyText(text).then(
     () => hooks.onCopy?.(id, { ok: true, chars: copiedCount(text), via }),
-    (e) => hooks.onCopy?.(id, { ok: false, error: e instanceof Error ? e.message : String(e), via }),
+    (e) => {
+      if (lastCopy === mark) lastCopy = null; // falló: un reintento inmediato no es un duplicado
+      hooks.onCopy?.(id, { ok: false, error: e instanceof Error ? e.message : String(e), via });
+    },
   );
 }
+/** Última copia pedida (para no repetirla; ver isDuplicateCopy). */
+let lastCopy: CopyMark | null = null;
 
 /** Pista de Mayús: una vez por sesión de la app. */
 let shiftHinted = false;
@@ -210,6 +219,10 @@ function create(id: string): Entry {
   const entry: Entry = { id, term, fit, search, el, glRetry: freshRetry(), mounted: false, lastCols: 0, lastRows: 0 };
 
   term.onData((d) => { hooks.onInput?.(id, d); be.ptyWrite(id, d); });
+  // Ratón en codificación antigua (X10, sin 1006): xterm lo entrega por onBinary, un carácter por byte. Sin esto la app
+  // no recibía el ratón. Va tal cual a ptyWrite: los bytes < 0x80 (columnas y filas hasta la 95) llegan exactos; los
+  // mayores salen como UTF-8 (como el modo 1005), que es lo único que admite la entrada de ConPTY. No es texto del usuario.
+  term.onBinary((d) => be.ptyWrite(id, d));
   term.onTitleChange((t) => hooks.onTitle(id, t));
   term.onBell(() => { if (opts.bell === 'flash') hooks.onBell(id); });
   registerCwdOsc(term, id);
@@ -232,9 +245,24 @@ function create(id: string): Entry {
   // Se mira en captura: con el ratón activado xterm se queda el evento.
   // Clic derecho: con el ratón activado xterm borra la selección al pulsar, antes de `contextmenu` (medido con
   // opencode: Mayús+arrastrar y clic derecho no copiaba). Se guarda aquí la selección para el menú.
+  // Clic derecho con el ratón activado: xterm se lo manda a la app y además salta `contextmenu`. Claude Code pega
+  // por su cuenta al recibirlo y Orchestra pegaba otra vez (texto pegado dos veces). Si lo atiende Orchestra, la app
+  // no lo ve (termcopy.ts: rightClickOwner); tampoco el movimiento con el botón derecho pulsado.
   let rightSel = '';
+  let rightHeld = false;
   el.addEventListener('mousedown', (down) => {
-    if (down.button === 2) { rightSel = term.hasSelection() ? term.getSelection() : ''; return; }
+    if (down.button === 2) {
+      rightSel = term.hasSelection() ? term.getSelection() : '';
+      const tracking = term.modes.mouseTrackingMode;
+      if (tracking !== 'none' && !down.shiftKey && rightClickOwner(opts.rightClick, tracking, false) === 'orchestra') {
+        rightHeld = true;
+        window.addEventListener('mouseup', () => { rightHeld = false; }, { capture: true, once: true });
+        down.stopPropagation(); // xterm no lo informa a la app
+        down.preventDefault();
+        term.focus(); // lo que hacía xterm al pulsar
+      }
+      return;
+    }
     if (down.button !== 0 || shiftHinted) return;
     const tracking = term.modes.mouseTrackingMode;
     if (tracking === 'none') return;
@@ -264,6 +292,7 @@ function create(id: string): Entry {
     if (hooks.onShortcut(ev, id)) return false;
     return true;
   });
+  el.addEventListener('mousemove', (mv) => { if (rightHeld && (mv.buttons & 2)) mv.stopPropagation(); }, true);
   el.addEventListener('contextmenu', (ev) => {
     ev.preventDefault();
     const sel = term.hasSelection() ? term.getSelection() : rightSel;

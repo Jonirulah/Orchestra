@@ -27,6 +27,34 @@ export function rightClickAction(mode: RightClickMode, hasSelection: boolean): '
   return 'paste';
 }
 
+/**
+ * ¿Quién atiende el clic derecho? Con el ratón activado xterm manda el botón derecho a la app Y además salta
+ * `contextmenu`, donde Orchestra copia o pega: dos acciones por un clic. Medido con Claude Code 2.1.331: al recibir
+ * el botón derecho sin selección suya PEGA el portapapeles por su cuenta, y Orchestra pegaba otra vez («pega dos veces»).
+ * Regla: si Orchestra va a actuar (modo «smart» o «paste»), el clic NO se manda a la app; con «none» es de la app.
+ * Sin seguimiento del ratón o con Mayús xterm no lo manda nunca: lo atiende Orchestra como siempre.
+ */
+export function rightClickOwner(mode: RightClickMode, tracking: MouseTracking, shift: boolean): 'app' | 'orchestra' {
+  if (tracking === 'none' || shift) return 'orchestra';
+  return mode === 'none' ? 'app' : 'orchestra';
+}
+
+/** Ventana (ms) en la que repetir el mismo texto desde el mismo panel cuenta como la misma copia. */
+export const COPY_DEDUPE_MS = 600;
+
+export interface CopyMark { id: string; text: string; at: number }
+
+/**
+ * Red contra la copia doble: el mismo texto, del mismo panel, dentro de la ventana, es la misma acción del usuario
+ * (un OSC 52 repetido, copiar al seleccionar + Ctrl+C…): ni se reescribe el portapapeles ni se avisa otra vez.
+ * Textos distintos seguidos, otro panel o el mismo texto pasada la ventana (a propósito) sí se copian.
+ */
+export function isDuplicateCopy(last: CopyMark | null, next: CopyMark, windowMs = COPY_DEDUPE_MS): boolean {
+  if (!last || last.id !== next.id || last.text !== next.text) return false;
+  const dt = next.at - last.at;
+  return dt >= 0 && dt < windowMs;
+}
+
 /** Modos de seguimiento del ratón de xterm (`term.modes.mouseTrackingMode`). */
 export type MouseTracking = 'none' | 'x10' | 'vt200' | 'drag' | 'any';
 

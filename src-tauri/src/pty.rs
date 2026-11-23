@@ -163,6 +163,9 @@ pub fn spawn(
     spec: SpawnSpec,
     on_exit: Box<dyn Fn(String, i32) + Send + Sync>,
 ) -> Result<Arc<Session>, String> {
+    // En las pruebas no corre main(): ORCHESTRA_CONPTY=bundled hace que toda la batería use el ConPTY incluido.
+    #[cfg(test)]
+    crate::conpty_bundle::test_hook();
     let pair = native_pty_system()
         .openpty(PtySize {
             rows: spec.rows.max(2),

@@ -3,6 +3,21 @@
 All notable changes to Orchestra are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project follows [Semantic Versioning](https://semver.org/) (0.x: anything may change between minor versions).
 
+## [0.4.8] - 2026-11-24
+
+### Fixed
+- **Right-click pasted twice in Claude Code**: with a terminal app that uses the mouse, the right-click was sent to the app and
+  also handled by Orchestra. Claude Code (full-screen renderer) pastes the clipboard on its own when it gets a right-click, a couple
+  of seconds later, so the text arrived twice. When *Right-click* is set to *Copy or paste* or *Paste*, the click is now handled by
+  Orchestra only and the app does not receive it; with *Nothing* the app gets it as before, and Shift+right-click is unchanged.
+- **Mouse clicks did not reach terminal apps on Windows 10** ([#1](https://github.com/Jonirulah/Orchestra/issues/1)): the console
+  host of Windows 10 predates mouse support in ConPTY and drops the clicks, so the clickable controls of Claude Code did nothing.
+  Orchestra now ships Microsoft's current console host (`conpty.dll` + `OpenConsole.exe` from Windows Terminal, MIT) and uses it
+  on Windows 10; Windows 11 keeps the system one. `ORCHESTRA_CONPTY=bundled` or `system` forces either, and the choice is written
+  to `conpty.log` in the data folder. Checked on Windows 11 by forcing the bundled host; not yet confirmed on a Windows 10 machine.
+- **Mouse reports in the legacy encoding** (apps that do not ask for SGR mouse mode) were not forwarded to the app.
+- Copying the same text from the same pane twice within 0.6 s counts as one copy (one clipboard write, one notice).
+
 ## [0.4.7] - 2026-11-18
 
 ### Fixed
