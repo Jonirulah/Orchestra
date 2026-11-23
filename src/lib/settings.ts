@@ -19,7 +19,7 @@ import { cleanEnvRows } from './agentenv.ts';
 import type { EnvRow } from './agentenv.ts';
 
 /** Debe coincidir con `version` de src-tauri/tauri.conf.json (lo vigila una prueba). */
-export const APP_VERSION = '0.4.7';
+export const APP_VERSION = '0.4.8';
 
 export type CursorStyle = 'bar' | 'block' | 'underline';
 export type RightClick = 'smart' | 'paste' | 'none';
