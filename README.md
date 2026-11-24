@@ -255,26 +255,21 @@ Documentation index: [docs/README.md](docs/README.md).
 
 ## Status and known limitations
 
-Orchestra 0.4.8 (0.1.0 was the first public release) is a one-person project. New in 0.4.8: right-click no longer pastes twice in Claude Code, and on Windows 10 mouse clicks now reach terminal apps (Orchestra ships Microsoft's current console host; checked on Windows 11 by forcing it, not yet confirmed on Windows 10). New in 0.4.7: fixes for a sluggish window with busy agents (sidebar animation and terminals stuck without GPU rendering) and for Claude panes resuming the wrong conversation after reopening or *Restart*; tested with unit tests and isolated runs of the desktop build with a stand-in for Claude Code, not yet with live Claude sessions. New in 0.4.6: your own environment variables for agent terminals (global and per account) with a one-click switch for Claude Code's experimental code mode, window opacity with Acrylic/Mica, and the full subagent list; tested with unit tests and an isolated run of the desktop build (variable checked inside a launched, restarted and restored agent terminal), not yet with a live Claude session. New in 0.4.4: a refresh button for accounts and usage, expired sign-ins renewed through Claude Code (`claude auth status`) so idle accounts keep fresh bars, and the Fable weekly bar always shown; tested with unit tests, fake servers and a real isolated run of the desktop build against real accounts. New in 0.4.3: Claude's markdown titles, bold and italic painted with the terminal theme's colors in Claude panes, and an option to make each Claude account use the terminal theme; tested with unit tests on real Claude Code output and in the browser demo, not yet in the desktop window with live sessions. New in 0.4.2: Claude Code themes generated from the terminal themes, including one that follows the terminal theme. New in 0.4.1: letter spacing for the terminal, and the font list now shows every installed font (it only offered a fixed set before). New in 0.4.0: automatic updates, SFTP files drawer, port forwarding, image paste and reliable copy, visible SSH reconnection and the *Need attention* list, MCP view and Consumption view; covered by unit tests, fake servers, a local sshd and the browser demo, but SFTP, tunnels and image upload have not been used yet against a real server from the desktop window (see the [changelog](CHANGELOG.md)). New in 0.3.0: usage history chart, SSH host folders, saved workspaces, agent card and notification sounds, tested with unit tests and in the browser demo but not yet with live agents or a real SSH server in the desktop build. New in 0.2.0: the MCP `run_command` tool, which is covered by automated tests with a fake runner and real local processes but has **not** been run against a real SSH server by the author yet. What is verified and what is not:
+Orchestra 0.4.8 (0.1.0 was the first public release) is a one-person project, used daily by its author on Windows 11 with live Claude Code sessions and real SSH
+servers. It is installed and updated through its own installer and updater, and CI (type checks, unit tests and Rust tests) runs on
+every push. What changed in each version, and how each change was tested, is in the [changelog](CHANGELOG.md).
 
-- **Verified by automated tests**: grid model, settings, account policies, usage formatting, auto-compact decision, theme import,
-  backup, i18n dictionaries (TypeScript); PTY, `~/.ssh/config` parser, token accounting, MCP protocol and security checks, askpass
-  helper, host-key flow, usage query against a fake server (Rust). Security-relevant tests were checked by planting bugs.
-- **Verified by hand** against real software: SSH password / passphrase login and host-key policies against a temporary sshd (OpenSSH
-  9.5 client); the MCP server with a real Claude Code client; the agent sidebar against live Claude sessions on the author's machine;
-  the usage endpoint once, for one Max account; Codex / opencode folder isolation against the real binaries.
-- **Not verified in real-world use**: reconnecting after a *real* SSH connection drop; server metrics against real servers; usage bars
-  against a real Claude status-line payload; `/compact` typed into a real pane; a real ChatGPT / opencode login from inside a pane.
-- **The installer has not been install-tested** on a clean machine, and **CI has never run** (the workflow exists but has not been
-  executed on GitHub yet).
-- **Windows only.** No macOS or Linux build.
-- **Not included**: MCP typing into terminals and file transfer over MCP (only `run_command` exists), snippets and broadcast, usage bars for
-  Codex / opencode. SSH panes do not show the git chip; remote metrics are Linux-only; Codex / opencode sessions are only detected by
-  process name (no tokens or session data).
+- **Automated tests** cover the grid model, settings, account policies, usage formatting, auto-compact, themes, backup and i18n
+  (TypeScript); PTY, `~/.ssh/config` parser, token accounting, MCP protocol and security checks, askpass helper, host-key flow, SFTP,
+  port forwarding and the usage query (Rust). Security-relevant tests were checked by planting bugs.
+- **Awaiting confirmation**: the Windows 10 mouse fix of 0.4.8 ([#1](https://github.com/Jonirulah/Orchestra/issues/1)) was checked on
+  Windows 11 by forcing the bundled console host, not on a Windows 10 machine. The author does not use Windows 10: reports from it
+  are welcome.
+- **Windows only.** No macOS or Linux build. Binaries are not code-signed, so SmartScreen may warn on first run.
+- **Not included**: MCP typing into terminals and file transfer over MCP (the MCP server lists hosts and terminals, reads terminals and
+  runs commands), snippets and broadcast, usage bars for Codex / opencode. SSH panes do not show the git chip; remote metrics are
+  Linux-only; Codex / opencode sessions are only detected by process name (no tokens or session data).
 - Code comments, `docs/DISENO.md` and the files in `docs/dev-notes/` are largely in Spanish.
-
-The testing strategy is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#testing-strategy) and the per-feature working notes
-are in [docs/dev-notes/](docs/dev-notes/).
 
 ## Contributing
 

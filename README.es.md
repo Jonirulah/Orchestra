@@ -266,29 +266,21 @@ docs/                 Arquitectura, seguridad, i18n, guía de usuario, contribuc
 
 ## Estado y limitaciones conocidas
 
-Orchestra 0.4.8 (la 0.1.0 fue la primera versión pública) es un proyecto de una sola persona. Novedades de la 0.4.8: el clic derecho ya no pega dos veces en Claude Code y, en Windows 10, los clics del ratón llegan a las apps del terminal (Orchestra lleva el anfitrión de consola actual de Microsoft; comprobado en Windows 11 forzándolo, aún sin confirmar en Windows 10). Novedades de la 0.4.7: arreglos para la ventana lenta con agentes ocupados (animación de la barra lateral y terminales que se quedaban sin dibujo por GPU) y para los paneles de Claude que retomaban otra conversación al reabrir o al *Reiniciar*; probados con tests y ejecuciones aisladas de la versión de escritorio con un sustituto de Claude Code, aún no con sesiones reales de Claude. Novedades de la 0.4.6: variables de entorno propias para los terminales de agente (globales y por cuenta) con un interruptor para el modo código experimental de Claude Code, opacidad de la ventana con Acrílico/Mica y la lista de subagentes completa; probadas con tests y una ejecución aislada de la versión de escritorio (la variable comprobada dentro de un terminal de agente lanzado, reiniciado y restaurado), aún no con una sesión real de Claude. Novedades de la 0.4.4: un botón para refrescar las cuentas y su uso, las sesiones caducadas se renuevan a través de Claude Code (`claude auth status`) para que las cuentas paradas tengan las barras al día, y la barra semanal de Fable sale siempre; probadas con tests, servidores falsos y una ejecución real aislada de la versión de escritorio con cuentas reales. Novedades de la 0.4.3: los títulos, negritas y cursivas del markdown de Claude con colores del tema del terminal en los paneles de Claude, y una opción para que cada cuenta de Claude use el tema del terminal; probadas con tests sobre salida real de Claude Code y en la demo del navegador, aún no en la ventana de escritorio con sesiones vivas. Novedades de la 0.4.2: temas de Claude Code sacados de los temas del terminal, con uno que sigue al tema del terminal. Novedades de la 0.4.1: espaciado entre letras en el terminal, y la lista de fuentes enseña todas las instaladas (antes solo ofrecía una lista fija). Novedades de la 0.4.0: actualizaciones automáticas, cajón de archivos SFTP, reenvío de puertos, pegar imágenes y copiar de forma fiable, reconexión SSH visible y la lista *Necesitan atención*, vista MCP y vista Consumo; cubiertas por tests, servidores falsos, un sshd local y la demo del navegador, pero SFTP, túneles y la subida de imágenes aún no se han usado contra un servidor real desde la ventana de escritorio (ver el [changelog](CHANGELOG.md)). Novedades de la 0.3.0: gráfica de uso, carpetas de hosts SSH, espacios guardados, ficha de agente y sonidos de aviso, probadas con tests y en la demo del navegador, pero aún no con agentes vivos ni un servidor SSH real en la app de escritorio. Novedad de la 0.2.0: la herramienta MCP `run_command`, cubierta por pruebas automáticas con un ejecutor falso y procesos locales reales, pero que el autor **no** ha probado aún contra un servidor SSH real. Qué está verificado y qué no:
+Orchestra 0.4.8 (la 0.1.0 fue la primera versión pública) es un proyecto de una sola persona, que su autor usa a diario en Windows 11 con sesiones reales de Claude Code y
+servidores SSH reales. Se instala y se actualiza con su propio instalador y actualizador, y la CI (comprobación de tipos, tests y
+pruebas de Rust) se ejecuta en cada subida. Qué cambió en cada versión, y cómo se probó, está en el [changelog](CHANGELOG.md).
 
-- **Verificado con pruebas automáticas**: modelo de la cuadrícula, ajustes, políticas de cuentas, formato de uso, decisión de
-  autocompactado, importación de temas, copia de seguridad, diccionarios de i18n (TypeScript); PTY, analizador de `~/.ssh/config`,
-  contabilidad de tokens, protocolo MCP y comprobaciones de seguridad, ayudante askpass, flujo de claves de host, consulta de uso
-  contra un servidor falso (Rust). Las pruebas de seguridad se comprobaron metiendo errores a propósito.
-- **Verificado a mano** con software real: inicio de sesión SSH con contraseña / frase de paso y políticas de claves de host contra
-  un sshd temporal (cliente OpenSSH 9.5); el servidor MCP con un cliente real de Claude Code; la barra lateral de agentes con
-  sesiones reales de Claude en el equipo del autor; el endpoint de uso una sola vez, con una cuenta Max; el aislamiento de carpetas
-  de Codex / opencode con los binarios reales.
-- **No verificado en uso real**: la reconexión tras una caída *real* de la conexión SSH; las métricas de servidores reales; las
-  barras de uso con una carga real de la línea de estado de Claude; `/compact` escrito en un panel real; un inicio de sesión real de
-  ChatGPT / opencode desde un panel.
-- **El instalador no se ha probado instalándolo** en un equipo limpio, y **la CI nunca se ha ejecutado** (el flujo existe pero aún
-  no se ha lanzado en GitHub).
-- **Solo Windows.** No hay versión para macOS ni Linux.
-- **No incluido**: teclear en terminales por MCP y transferencia de archivos por MCP (solo existe `run_command`), snippets y difusión,
-  barras de uso para Codex / opencode. Los paneles SSH no muestran la etiqueta de git; las métricas remotas son solo para Linux; las
-  sesiones de Codex / opencode solo se detectan por el nombre del proceso (sin tokens ni datos de sesión).
-- Los comentarios del código, `docs/DISENO.md` y los archivos de `docs/dev-notes/` están en gran parte en español.
-
-La estrategia de pruebas se describe en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#testing-strategy) y las notas de trabajo por
-función están en [docs/dev-notes/](docs/dev-notes/).
+- **Pruebas automáticas**: modelo de la cuadrícula, ajustes, políticas de cuentas, formato del uso, auto-compact, temas, copia de
+  seguridad e i18n (TypeScript); PTY, lector de `~/.ssh/config`, cuenta de tokens, protocolo MCP y sus comprobaciones de seguridad,
+  askpass, claves de host, SFTP, reenvío de puertos y consulta de uso (Rust). Las pruebas de seguridad se comprobaron plantando fallos.
+- **Pendiente de confirmar**: el arreglo del ratón en Windows 10 de la 0.4.8 ([#1](https://github.com/Jonirulah/Orchestra/issues/1))
+  se comprobó en Windows 11 forzando el anfitrión de consola incluido, no en un equipo con Windows 10. El autor no usa Windows 10:
+  se agradecen los informes desde ahí.
+- **Solo Windows.** No hay versión para macOS ni Linux. Los binarios no están firmados, así que SmartScreen puede avisar al abrirlos.
+- **No incluido**: escribir en terminales y transferir archivos por MCP (el servidor MCP lista hosts y terminales, lee terminales y
+  ejecuta órdenes), fragmentos y difusión, barras de uso de Codex / opencode. Los paneles SSH no muestran la rama de git; las
+  métricas remotas son solo para Linux; las sesiones de Codex / opencode solo se detectan por el nombre del proceso (sin tokens ni datos de sesión).
+- Los comentarios del código, `docs/DISENO.md` y los archivos de `docs/dev-notes/` están en su mayoría en español.
 
 ## Contribuir
 
